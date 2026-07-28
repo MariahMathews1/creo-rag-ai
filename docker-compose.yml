@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: sqlite:////app/data/creo_assistant.db
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      AI_PROVIDER: mock
+      EMBEDDING_PROVIDER: mock
+      DOCUMENT_STORAGE_PATH: /app/data/documents
+      MAX_DOCUMENT_UPLOAD_MB: 50
+    volumes:
+      - creo-data:/app/data
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000/api
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  creo-data:
