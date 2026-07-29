@@ -58,6 +58,8 @@ export interface AnalysisProject {
   alignment_status: string;
   alignment_version: number;
   alignment_summary_json: Record<string, unknown>;
+  machine_profile_revision_id: number | null;
+  machine_profile_snapshot_json: Record<string, unknown>;
 }
 
 export interface CLRecord {
@@ -263,4 +265,85 @@ export interface MachineProfileRevision {
   safe_start_template: string | null; program_end_template: string | null;
   capabilities_json: Record<string, unknown>; machine_configuration_json: Record<string, unknown>;
   review_summary: string | null; approved_at: string | null;
+}
+
+export interface ReferenceProgram {
+  id: number; machine_profile_id: number; machine_profile_revision_id: number;
+  source_document_id: number | null; name: string; description: string | null;
+  original_filename: string | null; file_hash: string; program_number: string | null;
+  program_type: string; controller_name: string | null; controller_version: string | null;
+  controller_variant: string | null; post_processor_name: string | null;
+  post_processor_version: string | null; post_processor_revision: string | null;
+  part_identifier: string | null; operation_identifier: string | null;
+  material: string | null; units: string | null; machine_variant: string | null;
+  installed_options_json: string[]; approval_status: string; eligibility_status: string;
+  eligibility_reason: string | null; approved_by_label: string | null;
+  parsing_status: string; parser_version: string | null; rule_set_version: string | null;
+  validation_summary_json: Record<string, unknown>; source_integrity_json: Record<string, unknown>;
+  ai_processing_allowed: boolean; imported_at: string; updated_at: string;
+  advisory_only: true; historical_similarity_is_not_certification: true;
+  safety_notice: string;
+}
+export interface ConventionEvidence {
+  id: number; reference_program_id: number; gcode_block_id: number | null;
+  line_start: number | null; line_end: number | null; excerpt: string;
+  evidence_type: string; match_context_json: Record<string, unknown>;
+  program_name: string | null;
+}
+export interface StandardConvention {
+  id: number; standard_profile_id: number | null; extraction_run_id: number | null;
+  convention_key: string; category: string; title: string; description: string;
+  convention_type: string; expected_pattern_json: Record<string, unknown>;
+  condition_json: Record<string, unknown>; expected_behavior_json: Record<string, unknown>;
+  applicability_json: Record<string, unknown>; severity: string; confidence: number;
+  support_count: number; eligible_program_count: number; support_percentage: number;
+  frequency_classification: string; proposal_status: string; review_status: string;
+  review_note: string | null; safety_relevant: boolean; evidence: ConventionEvidence[];
+}
+export interface StandardExtractionRun {
+  id: number; machine_profile_id: number; machine_profile_revision_id: number;
+  status: string; selected_reference_program_ids_json: number[];
+  algorithm_version: string; settings_json: Record<string, unknown>;
+  summary_json: Record<string, unknown>; completed_at: string | null;
+  advisory_only: true; historical_similarity_is_not_certification: true;
+  safety_notice: string;
+}
+export interface StandardProfile {
+  id: number; machine_profile_id: number; machine_profile_revision_id: number;
+  name: string; revision_number: number; status: string;
+  source_program_ids_json: number[]; summary_json: Record<string, unknown>;
+  stale: boolean; stale_reasons_json: string[]; approved_at: string | null;
+  conventions: StandardConvention[]; safety_notice: string;
+}
+export interface ComparisonFinding {
+  id: number; comparison_run_id: number; standard_convention_id: number | null;
+  severity: string; status: string; title: string; description: string;
+  line_number: number | null; source_line: string | null;
+  expected_pattern_json: Record<string, unknown>;
+  observed_pattern_json: Record<string, unknown>; comparison_type: string;
+  recommendation: string; exception_classification: string | null;
+  exception_note: string | null;
+}
+export interface ProgramComparison {
+  id: number; analysis_project_id: number; machine_profile_revision_id: number;
+  standard_profile_id: number; reference_program_id: number | null; status: string;
+  summary_json: Record<string, number | boolean>; parser_version: string;
+  algorithm_version: string; stale: boolean; stale_reasons_json: string[];
+  findings: ComparisonFinding[]; safety_notice: string;
+}
+export interface SimilarProgram {
+  program: ReferenceProgram; similarity_score: number;
+  match_reasons: string[]; differences: string[];
+}
+export interface SideBySideComparison {
+  comparison_id: number; current_program: string; reference_program: string;
+  sections: Array<{
+    type: "common" | "added" | "removed" | "changed";
+    reference_line_start: number; current_line_start: number;
+    reference_lines: string[]; current_lines: string[];
+  }>;
+  source_metadata: Record<string, unknown>;
+  deterministic_findings: Array<Record<string, unknown>>;
+  convention_findings: ComparisonFinding[];
+  safety_notice: string;
 }

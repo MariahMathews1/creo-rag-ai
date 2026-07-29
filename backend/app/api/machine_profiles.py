@@ -62,6 +62,29 @@ def _apply_update(
     MachineProfileCreate.model_validate(merged)
     for field, value in changes.items():
         setattr(profile, field, value)
+    if changes:
+        from app.models.program_standards import (
+            OrganizationalStandardProfile, ProgramComparisonRun,
+        )
+        from sqlalchemy import update
+        standards = list(db.scalars(select(
+            OrganizationalStandardProfile.id
+        ).where(
+            OrganizationalStandardProfile.machine_profile_id == profile.id
+        )))
+        db.execute(update(OrganizationalStandardProfile).where(
+            OrganizationalStandardProfile.machine_profile_id == profile.id
+        ).values(
+            stale=True,
+            stale_reasons_json=["Machine profile changed"],
+        ))
+        if standards:
+            db.execute(update(ProgramComparisonRun).where(
+                ProgramComparisonRun.standard_profile_id.in_(standards)
+            ).values(
+                stale=True,
+                stale_reasons_json=["Machine profile changed"],
+            ))
     try:
         db.commit()
     except IntegrityError as exc:

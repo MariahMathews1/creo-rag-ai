@@ -61,6 +61,27 @@ Open Machines, choose the fictional LT-200, then use **Extract profile** or
 Documentation coverage and confidence are not safety, accuracy, completeness, or
 production-readiness scores.
 
+## Phase 6 approved-program standards
+
+Phase 6 adds governed reference CNC programs, explicit eligibility, reuse of the
+deterministic parser and validator, explainable convention extraction with exact
+program-line evidence, versioned organizational standards, new-program
+comparison, similar-program retrieval, side-by-side diffs, exception
+classification, stale detection, and reports.
+
+```bash
+make migrate
+cd backend
+python -m app.scripts.seed_approved_program_demo
+```
+
+Open a machine profile and select **Approved programs**. Reference programs are
+never eligible by default, frequency never creates a requirement, standards are
+inactive until explicitly approved, and historical similarity is not safety
+certification. See [the architecture](docs/approved-program-architecture.md),
+[extraction guide](docs/programming-standard-extraction.md), and
+[comparison guide](docs/program-comparison.md).
+
 ## Project structure
 
 ```text
@@ -201,6 +222,16 @@ npm run build
 | `POST` | `/api/machine-profile-revisions/{id}/submit-for-review` | Submit an inactive draft |
 | `POST` | `/api/machine-profile-revisions/{id}/approve` | Explicitly approve and activate |
 | `POST` | `/api/machine-profile-revisions/{id}/reject` | Retain a rejected revision |
+| `POST/GET` | `/api/machines/{id}/reference-programs` | Import/list governed historical programs |
+| `POST` | `/api/reference-programs/{id}/parse` | Parse and deterministically validate a reference |
+| `POST` | `/api/reference-programs/{id}/mark-eligible` | Explicitly allow pattern analysis |
+| `POST/GET` | `/api/machines/{id}/standard-extraction-runs` | Extract deterministic convention proposals |
+| `GET` | `/api/standard-extraction-runs/{id}/proposals` | Review convention evidence |
+| `POST` | `/api/standard-extraction-runs/{id}/apply-to-draft` | Create an inactive standard draft |
+| `POST` | `/api/standard-profiles/{id}/approve` | Explicitly approve a standard revision |
+| `POST/GET` | `/api/analyses/{id}/standard-comparisons` | Compare a program to an approved standard |
+| `GET` | `/api/analyses/{id}/similar-reference-programs` | Retrieve similar eligible examples |
+| `GET` | `/api/standard-comparisons/{id}/side-by-side` | Logical section and line diff |
 
 Every analysis response includes `advisory_only: true` and a safety notice.
 

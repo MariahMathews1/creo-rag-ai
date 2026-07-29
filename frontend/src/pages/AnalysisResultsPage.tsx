@@ -4,7 +4,10 @@ import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { SafetyBanner } from "../components/SafetyBanner";
 import { SeverityBadge } from "../components/SeverityBadge";
-import type { AnalysisFinding, AnalysisProject, MachineProfile, Severity } from "../types";
+import type {
+  AnalysisFinding, AnalysisProject, MachineProfile, ProgramComparison,
+  Severity, StandardProfile,
+} from "../types";
 
 const severities: Severity[] = ["blocking", "warning", "informational"];
 
@@ -19,6 +22,10 @@ export function AnalysisResultsPage() {
   const [summary, setSummary] = useState("");
   const [error, setError] = useState("");
   const [selectedFindingId, setSelectedFindingId] = useState<number | null>(null);
+  const [standards, setStandards] = useState<StandardProfile[]>([]);
+  const [comparisons, setComparisons] = useState<ProgramComparison[]>([]);
+  const [standardId, setStandardId] = useState(0);
+  const [comparisonBusy, setComparisonBusy] = useState(false);
 
   useEffect(() => {
     Promise.all([api.getProject(id), api.getFindings(id), api.listProfiles()])
@@ -28,6 +35,21 @@ export function AnalysisResultsPage() {
         setMachine(
           profiles.find((profile) => profile.id === projectData.machine_profile_id) ?? null,
         );
+        if (
+          typeof api.listStandards === "function"
+          && typeof api.listStandardComparisons === "function"
+        ) {
+          Promise.all([
+            api.listStandards(projectData.machine_profile_id),
+            api.listStandardComparisons(projectData.id),
+          ]).then(([standardData, comparisonData]) => {
+            const approved = standardData.filter((item) =>
+              item.status === "approved" && !item.stale
+            );
+            setStandards(approved); setComparisons(comparisonData);
+            if (approved.length) setStandardId(approved[0].id);
+          }).catch(() => {});
+        }
       })
       .catch((cause) => setError(cause.message));
     api.explain(id, "findings").then((value) => setSummary(value.explanation)).catch(() => {});
@@ -60,6 +82,21 @@ export function AnalysisResultsPage() {
           .getElementById(`line-${finding.line_number}`)
           ?.scrollIntoView?.({ behavior: "smooth", block: "center" });
       });
+    }
+  }
+
+  async function runStandardComparison() {
+    if (!standardId) return;
+    setComparisonBusy(true); setError("");
+    try {
+      const result = await api.createStandardComparison(id, standardId);
+      window.location.assign(
+        `/analyses/${id}/approved-program-comparison/${result.id}`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Comparison failed");
+    } finally {
+      setComparisonBusy(false);
     }
   }
 
@@ -103,6 +140,31 @@ export function AnalysisResultsPage() {
           to={selectedFinding ? `/manual-assistant?machine=${project.machine_profile_id}&question=${encodeURIComponent(`What do the uploaded manuals state about ${selectedFinding.rule_id} and this line: ${selectedFinding.source_line ?? ""}?`)}` : "#"}
         >Explain using machine manuals →</Link>
       </div>
+      <section className="panel organizational-comparison-launcher">
+        <div><span className="eyebrow">Separate evidence layer</span>
+          <h2>Organizational programming conventions</h2>
+          <p>Compare against an explicitly approved standard. Historical similarity is not certification and does not change deterministic severity.</p>
+        </div>
+        <div>
+          <label>Approved standard<select aria-label="Approved programming standard"
+            value={standardId} onChange={(event) => setStandardId(Number(event.target.value))}>
+            {standards.length === 0 && <option value={0}>No approved standard for this revision</option>}
+            {standards.map((standard) => <option key={standard.id} value={standard.id}>
+              {standard.name} · v{standard.revision_number}
+            </option>)}
+          </select></label>
+          <button className="button primary" disabled={!standardId || comparisonBusy}
+            onClick={() => void runStandardComparison()}>
+            {comparisonBusy ? "Comparing…" : "Compare to standard"}
+          </button>
+        </div>
+        {comparisons.length > 0 && <div className="run-links">
+          {comparisons.map((comparison) => <Link key={comparison.id}
+            to={`/analyses/${id}/approved-program-comparison/${comparison.id}`}>
+            Comparison #{comparison.id} · {comparison.status}{comparison.stale ? " · stale" : ""}
+          </Link>)}
+        </div>}
+      </section>
       <div className="results-grid">
         <section className="code-viewer" aria-label="Original G-code">
           <header><div><span className="file-dot" />Program source</div><small>{project.gcode_source?.split("\n").length ?? 0} lines</small></header>

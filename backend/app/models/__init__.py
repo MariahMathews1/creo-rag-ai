@@ -16,6 +16,11 @@ from app.models.profile_extraction import (
     MachineProfileFieldSource, MachineProfileRevision, ProfileExtractionRun,
     ProfileFieldEvidence, ProfileFieldProposal,
 )
+from app.models.program_standards import (
+    OrganizationalStandardProfile, ProgramComparisonFinding,
+    ProgramComparisonRun, ReferenceProgram, ReferenceProgramBlock,
+    StandardConvention, StandardConventionEvidence, StandardExtractionRun,
+)
 
 __all__ = [
     "AnalysisFinding", "AnalysisProject", "AnswerCitation", "AuditEvent",
@@ -24,4 +29,8 @@ __all__ = [
     "AlignmentRun", "AlignmentLink", "AlignmentIssue",
     "MachineProfileRevision", "ProfileExtractionRun", "ProfileFieldProposal",
     "ProfileFieldEvidence", "MachineProfileFieldSource",
+    "ReferenceProgram", "ReferenceProgramBlock", "StandardExtractionRun",
+    "OrganizationalStandardProfile", "StandardConvention",
+    "StandardConventionEvidence", "ProgramComparisonRun",
+    "ProgramComparisonFinding",
 ]

@@ -12,6 +12,8 @@ import type {
   CLRecord, GCodeBlock, AlignmentRun, AlignmentLink, AlignmentIssue,
   ProfileExtractionRun, ProfileProposal, MachineProfileRevision,
   ProfileReviewQueue, ProfileReviewSummary, BatchReviewResult,
+  ReferenceProgram, StandardConvention, StandardExtractionRun, StandardProfile,
+  ProgramComparison, SimilarProgram, SideBySideComparison, ComparisonFinding,
 } from "../types";
 
 const API_BASE_URL =
@@ -261,4 +263,110 @@ export const api = {
     request<{ fields: Array<{ field_key: string; current: unknown; proposed: unknown; changed: boolean }> }>(
       `/machine-profile-revisions/${left}/compare/${right}`,
     ),
+  listReferencePrograms: (machineId: number) =>
+    request<ReferenceProgram[]>(`/machines/${machineId}/reference-programs`),
+  createReferenceProgram: (machineId: number, payload: Record<string, unknown>) =>
+    request<ReferenceProgram>(`/machines/${machineId}/reference-programs`, {
+      method: "POST", body: JSON.stringify(payload),
+    }),
+  updateReferenceProgram: (programId: number, payload: Record<string, unknown>) =>
+    request<ReferenceProgram>(`/reference-programs/${programId}`, {
+      method: "PUT", body: JSON.stringify(payload),
+    }),
+  parseReferenceProgram: (programId: number) =>
+    request<ReferenceProgram>(`/reference-programs/${programId}/parse`, {
+      method: "POST",
+    }),
+  markReferenceEligible: (programId: number, reason: string) =>
+    request<ReferenceProgram>(`/reference-programs/${programId}/mark-eligible`, {
+      method: "POST", body: JSON.stringify({ reason }),
+    }),
+  markReferenceIneligible: (programId: number, reason: string) =>
+    request<ReferenceProgram>(`/reference-programs/${programId}/mark-ineligible`, {
+      method: "POST", body: JSON.stringify({ reason }),
+    }),
+  startStandardExtraction: (machineId: number, payload: {
+    machine_profile_revision_id: number; reference_program_ids: number[];
+    post_processor_revision?: string;
+  }) => request<StandardExtractionRun>(
+    `/machines/${machineId}/standard-extraction-runs`,
+    { method: "POST", body: JSON.stringify(payload) },
+  ),
+  listStandardExtractions: (machineId: number) =>
+    request<StandardExtractionRun[]>(
+      `/machines/${machineId}/standard-extraction-runs`,
+    ),
+  getStandardExtraction: (runId: number) =>
+    request<StandardExtractionRun>(`/standard-extraction-runs/${runId}`),
+  listStandardConventions: (runId: number) =>
+    request<StandardConvention[]>(
+      `/standard-extraction-runs/${runId}/proposals`,
+    ),
+  reviewStandardConvention: (
+    conventionId: number,
+    payload: {
+      review_status: string; expected_pattern_json?: Record<string, unknown>;
+      review_note?: string;
+    },
+  ) => request<StandardConvention>(`/standard-conventions/${conventionId}/review`, {
+    method: "PUT", body: JSON.stringify(payload),
+  }),
+  batchReviewConventions: (
+    runId: number, conventionIds: number[], reviewStatus: string,
+  ) => request<{ succeeded: number[]; failed: Array<{
+    convention_id: number; reason: string;
+  }> }>(`/standard-extraction-runs/${runId}/proposals/batch-review`, {
+    method: "POST",
+    body: JSON.stringify({
+      convention_ids: conventionIds, review_status: reviewStatus,
+      acknowledge_frequency_is_not_requirement: reviewStatus === "accepted",
+    }),
+  }),
+  createStandardDraft: (runId: number, name: string) =>
+    request<StandardProfile>(`/standard-extraction-runs/${runId}/apply-to-draft`, {
+      method: "POST", body: JSON.stringify({ name }),
+    }),
+  listStandards: (machineId: number) =>
+    request<StandardProfile[]>(`/machines/${machineId}/standard-profiles`),
+  getStandard: (standardId: number) =>
+    request<StandardProfile>(`/standard-profiles/${standardId}`),
+  submitStandard: (standardId: number, note: string) =>
+    request<StandardProfile>(`/standard-profiles/${standardId}/submit-for-review`, {
+      method: "POST", body: JSON.stringify({ note }),
+    }),
+  approveStandard: (standardId: number, note: string) =>
+    request<StandardProfile>(`/standard-profiles/${standardId}/approve`, {
+      method: "POST", body: JSON.stringify({ note }),
+    }),
+  createStandardComparison: (
+    analysisId: number, standardProfileId: number, referenceProgramId?: number,
+  ) => request<ProgramComparison>(`/analyses/${analysisId}/standard-comparisons`, {
+    method: "POST",
+    body: JSON.stringify({
+      standard_profile_id: standardProfileId,
+      reference_program_id: referenceProgramId,
+    }),
+  }),
+  listStandardComparisons: (analysisId: number) =>
+    request<ProgramComparison[]>(`/analyses/${analysisId}/standard-comparisons`),
+  getStandardComparison: (comparisonId: number) =>
+    request<ProgramComparison>(`/standard-comparisons/${comparisonId}`),
+  getComparisonFindings: (comparisonId: number) =>
+    request<ComparisonFinding[]>(`/standard-comparisons/${comparisonId}/findings`),
+  getSideBySideComparison: (comparisonId: number) =>
+    request<SideBySideComparison>(
+      `/standard-comparisons/${comparisonId}/side-by-side`,
+    ),
+  classifyComparisonException: (
+    findingId: number, classification: string, note: string,
+  ) => request<ComparisonFinding>(
+    `/standard-comparison-findings/${findingId}/exception`,
+    { method: "PUT", body: JSON.stringify({ classification, note }) },
+  ),
+  listSimilarPrograms: (analysisId: number) =>
+    request<SimilarProgram[]>(`/analyses/${analysisId}/similar-reference-programs`),
+  standardReportUrl: (standardId: number, format = "markdown") =>
+    `${API_BASE_URL}/standard-profiles/${standardId}/report?format=${format}`,
+  comparisonReportUrl: (comparisonId: number, format = "markdown") =>
+    `${API_BASE_URL}/standard-comparisons/${comparisonId}/report?format=${format}`,
 };

@@ -137,6 +137,13 @@ def submit_gcode_source(
     db.execute(update(AlignmentRun).where(
         AlignmentRun.analysis_project_id == project.id
     ).values(stale=True))
+    from app.models.program_standards import ProgramComparisonRun
+    db.execute(update(ProgramComparisonRun).where(
+        ProgramComparisonRun.analysis_project_id == project.id
+    ).values(
+        stale=True,
+        stale_reasons_json=["Analysis G-code source changed"],
+    ))
     project.status = ProjectStatus.DRAFT
     db.commit()
     db.refresh(project)

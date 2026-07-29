@@ -11,6 +11,9 @@ import { TraceabilityPage } from "./pages/TraceabilityPage";
 import { ProfileExtractionSetupPage } from "./pages/ProfileExtractionSetupPage";
 import { ProfileExtractionReviewPage } from "./pages/ProfileExtractionReviewPage";
 import { ProfileRevisionsPage } from "./pages/ProfileRevisionsPage";
+import { ReferenceProgramsPage } from "./pages/ReferenceProgramsPage";
+import { StandardExtractionReviewPage } from "./pages/StandardExtractionReviewPage";
+import { ApprovedProgramComparisonPage } from "./pages/ApprovedProgramComparisonPage";
 
 export default function App() {
   return (
@@ -28,6 +31,9 @@ export default function App() {
           <Route path="machines/:machineId/profile-extraction/new" element={<ProfileExtractionSetupPage />} />
           <Route path="machines/:machineId/profile-extraction/:runId" element={<ProfileExtractionReviewPage />} />
           <Route path="machines/:machineId/revisions" element={<ProfileRevisionsPage />} />
+          <Route path="machines/:machineId/reference-programs" element={<ReferenceProgramsPage />} />
+          <Route path="machines/:machineId/standards/extraction/:runId" element={<StandardExtractionReviewPage />} />
+          <Route path="analyses/:analysisId/approved-program-comparison/:comparisonId" element={<ApprovedProgramComparisonPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
