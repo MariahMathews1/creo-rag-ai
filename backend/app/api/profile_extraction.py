@@ -15,8 +15,11 @@ from app.profile_extraction.registry import FIELD_MAP
 from app.profile_extraction.service import execute_extraction
 from app.profile_extraction.units import UNIT_ALIASES, normalize_unit
 from app.schemas.profile_extraction import (
-    ApplyDraftRequest, ApprovalRequest, ExtractionRunRead, ExtractionStart,
-    ProposalRead, ProposalReview, RejectionRequest, RevisionRead,
+    AcceptEligibleHighConfidenceRequest, ApplyDraftRequest, ApprovalRequest,
+    BatchReviewFailure, BatchReviewRequest, BatchReviewResponse,
+    ExtractionRunRead, ExtractionStart, ProposalRead, ProposalReview,
+    RejectionRequest, ReviewCategorySummary, ReviewEventRequest,
+    ReviewQueueRead, ReviewSummaryRead, RevisionRead,
 )
 
 router = APIRouter(tags=["profile extraction"])
@@ -35,6 +38,14 @@ SUPPORTED_EXTRACTION_DOCUMENT_TYPES = {
     DocumentType.SPECIFICATION_DOCUMENT, DocumentType.MAINTENANCE_MANUAL,
     DocumentType.PARAMETER_LIST, DocumentType.MACHINE_CONFIGURATION_DOCUMENT,
     DocumentType.PURCHASE_SPECIFICATION,
+}
+REVIEW_STATUSES = {
+    "pending", "accepted", "accepted_with_edit", "rejected", "deferred",
+    "manually_entered", "not_applicable",
+}
+PHYSICAL_CLAIM_CATEGORIES = {
+    "axis_limits", "spindle", "feed_and_motion", "tooling", "workholding",
+    "capabilities", "safety_and_setup",
 }
 
 
@@ -181,26 +192,410 @@ def get_proposal(proposal_id: int, db: Session = Depends(get_db)):
     return value
 
 
+def _proposals_for_run(run_id: int, db: Session) -> list[ProfileFieldProposal]:
+    return list(db.scalars(
+        select(ProfileFieldProposal)
+        .options(selectinload(ProfileFieldProposal.evidence))
+        .where(ProfileFieldProposal.extraction_run_id == run_id)
+        .order_by(ProfileFieldProposal.field_category, ProfileFieldProposal.field_label)
+    ))
+
+
+def _batch_accept_block_reason(
+    proposal: ProfileFieldProposal,
+    run: ProfileExtractionRun,
+) -> str | None:
+    settings = get_settings()
+    if proposal.review_status != "pending":
+        return "already_reviewed"
+    if proposal.proposal_status == "conflicting":
+        return "unresolved_conflict"
+    if proposal.proposal_status == "ambiguous":
+        return "ambiguous"
+    if proposal.proposal_status != "found":
+        return "proposal_not_found"
+    if proposal.confidence < settings.profile_extraction_high_confidence:
+        return "below_high_confidence_threshold"
+    if proposal.normalized_value_json is None:
+        return "normalized_value_missing"
+    if not proposal.evidence:
+        return "missing_citation"
+    if not any(item.evidence_type == "supporting" for item in proposal.evidence):
+        return "missing_supporting_citation"
+    if any(item.evidence_type == "conflicting" for item in proposal.evidence):
+        return "conflicting_evidence"
+    if proposal.requires_exact_machine_verification:
+        return "exact_machine_verification_required"
+    if proposal.safety_relevant:
+        return "safety_relevant_requires_individual_review"
+    if (
+        run.selected_machine_variant
+        and proposal.variant_applicability_json
+        and run.selected_machine_variant not in proposal.variant_applicability_json
+    ):
+        return "variant_not_applicable"
+    evidence_types = {item.document_type for item in proposal.evidence}
+    if (
+        proposal.field_category in PHYSICAL_CLAIM_CATEGORIES
+        and evidence_types
+        and evidence_types <= {DocumentType.CONTROLLER_MANUAL.value}
+    ):
+        return "controller_evidence_cannot_prove_installed_machine_claim"
+    return None
+
+
+def _review_summary(
+    run: ProfileExtractionRun,
+    proposals: list[ProfileFieldProposal],
+    db: Session,
+) -> ReviewSummaryRead:
+    settings = get_settings()
+    machine = machine_or_404(run.machine_profile_id, db)
+    counts = {
+        status: sum(item.review_status == status for item in proposals)
+        for status in REVIEW_STATUSES
+    }
+    pending = counts["pending"]
+    category_summaries = []
+    for category in sorted({item.field_category for item in proposals}):
+        items = [item for item in proposals if item.field_category == category]
+        category_pending = sum(item.review_status == "pending" for item in items)
+        category_summaries.append(ReviewCategorySummary(
+            category=category,
+            total=len(items),
+            reviewed=len(items) - category_pending,
+            pending=category_pending,
+            conflicts=sum(
+                item.proposal_status == "conflicting"
+                and item.review_status == "pending"
+                for item in items
+            ),
+            complete=category_pending == 0,
+        ))
+    conflict_pending = sum(
+        item.proposal_status == "conflicting" and item.review_status == "pending"
+        for item in proposals
+    )
+    ambiguous_pending = sum(
+        item.proposal_status == "ambiguous" and item.review_status == "pending"
+        for item in proposals
+    )
+    high_eligible = sum(
+        _batch_accept_block_reason(item, run) is None for item in proposals
+    )
+    safety_low_pending = sum(
+        item.review_status == "pending"
+        and item.safety_relevant
+        and item.confidence < settings.profile_extraction_high_confidence
+        for item in proposals
+    )
+    variant_rerun_required = (
+        len(run.detected_variants_json or []) > 1
+        and not run.selected_machine_variant
+    )
+    readiness_reasons = []
+    if pending:
+        readiness_reasons.append(f"{pending} proposals still require intentional review")
+    if conflict_pending:
+        readiness_reasons.append(f"{conflict_pending} conflicts remain unresolved")
+    if safety_low_pending:
+        readiness_reasons.append(
+            f"{safety_low_pending} low-confidence safety-relevant fields require review"
+        )
+    if variant_rerun_required:
+        readiness_reasons.append("Select and re-run the exact machine variant")
+    draft_ready = not readiness_reasons
+    revision = (
+        db.get(MachineProfileRevision, run.target_revision_id)
+        if run.target_revision_id else None
+    )
+    identity_ready = bool(
+        revision
+        and revision.manufacturer
+        and revision.model
+        and revision.machine_type
+        and revision.controller_name
+    )
+    approval_ready = bool(
+        draft_ready
+        and revision
+        and revision.status in {"draft", "under_review"}
+        and identity_ready
+    )
+    found_pending = sum(
+        item.review_status == "pending"
+        and item.proposal_status in {"found", "derived"}
+        for item in proposals
+    )
+    not_found_pending = sum(
+        item.review_status == "pending" and item.proposal_status == "not_found"
+        for item in proposals
+    )
+    recommended = None
+    if conflict_pending:
+        recommended = "conflicts"
+    elif high_eligible:
+        recommended = "high-confidence"
+    elif any(
+        item.review_status == "pending"
+        and item.proposal_status == "found"
+        and settings.profile_extraction_medium_confidence
+        <= item.confidence
+        < settings.profile_extraction_high_confidence
+        for item in proposals
+    ):
+        recommended = "medium-confidence"
+    elif any(
+        item.review_status == "pending"
+        and item.proposal_status == "found"
+        and item.confidence < settings.profile_extraction_medium_confidence
+        for item in proposals
+    ):
+        recommended = "low-confidence"
+    elif not_found_pending:
+        recommended = "not-found"
+    reviewed = len(proposals) - pending
+    return ReviewSummaryRead(
+        run_id=run.id,
+        machine_profile_id=run.machine_profile_id,
+        machine_name=machine.name,
+        selected_variant=run.selected_machine_variant,
+        run_status=run.status,
+        documents_analyzed=len(run.selected_document_ids_json or []),
+        total=len(proposals),
+        found=sum(item.proposal_status in {"found", "derived"} for item in proposals),
+        not_found=sum(item.proposal_status == "not_found" for item in proposals),
+        conflicting=sum(item.proposal_status == "conflicting" for item in proposals),
+        ambiguous=sum(item.proposal_status == "ambiguous" for item in proposals),
+        pending=pending,
+        accepted=counts["accepted"],
+        accepted_with_edit=counts["accepted_with_edit"],
+        rejected=counts["rejected"],
+        deferred=counts["deferred"],
+        manually_entered=counts["manually_entered"],
+        not_applicable=counts["not_applicable"],
+        found_pending=found_pending,
+        not_found_pending=not_found_pending,
+        conflict_pending=conflict_pending,
+        ambiguous_pending=ambiguous_pending,
+        high_confidence_eligible=high_eligible,
+        safety_low_confidence_pending=safety_low_pending,
+        remaining_required_review=pending,
+        reviewed=reviewed,
+        review_progress_percent=round(reviewed / max(len(proposals), 1) * 100, 1),
+        documentation_coverage=float(
+            (run.summary_json or {}).get("documentation_coverage", 0)
+        ),
+        category_summaries=category_summaries,
+        draft_ready=draft_ready,
+        approval_ready=approval_ready,
+        variant_rerun_required=variant_rerun_required,
+        readiness_reasons=readiness_reasons,
+        recommended_next_queue=recommended,
+        confidence_high_threshold=settings.profile_extraction_high_confidence,
+        confidence_medium_threshold=settings.profile_extraction_medium_confidence,
+    )
+
+
+@router.get(
+    "/profile-extraction-runs/{run_id}/review-summary",
+    response_model=ReviewSummaryRead,
+)
+def get_review_summary(run_id: int, db: Session = Depends(get_db)):
+    run = db.get(ProfileExtractionRun, run_id)
+    if not run:
+        raise HTTPException(404, "Extraction run not found")
+    return _review_summary(run, _proposals_for_run(run_id, db), db)
+
+
+def _matches_queue(
+    proposal: ProfileFieldProposal,
+    queue: str,
+    settings,
+) -> bool:
+    if queue == "all":
+        return True
+    if queue == "needs-review":
+        return proposal.review_status == "pending"
+    if queue == "conflicts":
+        return (
+            proposal.review_status == "pending"
+            and proposal.proposal_status == "conflicting"
+        )
+    if queue == "high-confidence":
+        return (
+            proposal.review_status == "pending"
+            and proposal.proposal_status == "found"
+            and proposal.confidence >= settings.profile_extraction_high_confidence
+        )
+    if queue == "medium-confidence":
+        return (
+            proposal.review_status == "pending"
+            and proposal.proposal_status == "found"
+            and settings.profile_extraction_medium_confidence
+            <= proposal.confidence
+            < settings.profile_extraction_high_confidence
+        )
+    if queue == "low-confidence":
+        return (
+            proposal.review_status == "pending"
+            and proposal.proposal_status == "found"
+            and proposal.confidence < settings.profile_extraction_medium_confidence
+        )
+    if queue == "not-found":
+        return (
+            proposal.review_status == "pending"
+            and proposal.proposal_status == "not_found"
+        )
+    expected_status = {
+        "deferred": "deferred",
+        "accepted": "accepted",
+        "rejected": "rejected",
+        "manual-entries": "manually_entered",
+        "not-applicable": "not_applicable",
+    }.get(queue)
+    return bool(expected_status and proposal.review_status == expected_status)
+
+
+@router.get(
+    "/profile-extraction-runs/{run_id}/review-queue",
+    response_model=ReviewQueueRead,
+)
+def get_review_queue(
+    run_id: int,
+    queue: str = Query("needs-review"),
+    search: str | None = Query(default=None, max_length=200),
+    category: str | None = None,
+    proposal_status: str | None = None,
+    review_status: str | None = None,
+    confidence_min: float = Query(0, ge=0, le=1),
+    confidence_max: float = Query(1, ge=0, le=1),
+    safety_relevant: bool | None = None,
+    requires_verification: bool | None = None,
+    has_evidence: bool | None = None,
+    has_conflicting_evidence: bool | None = None,
+    source_document_id: int | None = None,
+    source_authority: str | None = None,
+    claim_scope: str | None = None,
+    machine_variant: str | None = None,
+    sort_by: str = Query(
+        "priority",
+        pattern=(
+            "^(priority|field_name|field_category|confidence|proposal_status|"
+            "review_status|evidence_count)$"
+        ),
+    ),
+    sort_direction: str = Query("asc", pattern="^(asc|desc)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(250, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    run = db.get(ProfileExtractionRun, run_id)
+    if not run:
+        raise HTTPException(404, "Extraction run not found")
+    settings = get_settings()
+    items = [
+        item for item in _proposals_for_run(run_id, db)
+        if _matches_queue(item, queue, settings)
+    ]
+    if category:
+        items = [item for item in items if item.field_category == category]
+    if proposal_status:
+        items = [item for item in items if item.proposal_status == proposal_status]
+    if review_status:
+        items = [item for item in items if item.review_status == review_status]
+    items = [
+        item for item in items
+        if confidence_min <= item.confidence <= confidence_max
+    ]
+    if safety_relevant is not None:
+        items = [item for item in items if item.safety_relevant == safety_relevant]
+    if requires_verification is not None:
+        items = [
+            item for item in items
+            if item.requires_exact_machine_verification == requires_verification
+        ]
+    if has_evidence is not None:
+        items = [item for item in items if bool(item.evidence) == has_evidence]
+    if has_conflicting_evidence is not None:
+        items = [
+            item for item in items
+            if any(evidence.evidence_type == "conflicting" for evidence in item.evidence)
+            == has_conflicting_evidence
+        ]
+    if source_document_id is not None:
+        items = [
+            item for item in items
+            if any(evidence.document_id == source_document_id for evidence in item.evidence)
+        ]
+    if source_authority:
+        items = [
+            item for item in items
+            if any(evidence.document_type == source_authority for evidence in item.evidence)
+        ]
+    if claim_scope:
+        items = [item for item in items if item.field_category == claim_scope]
+    if machine_variant:
+        items = [
+            item for item in items
+            if not item.variant_applicability_json
+            or machine_variant in item.variant_applicability_json
+        ]
+    if search:
+        lowered = search.casefold()
+        items = [
+            item for item in items
+            if lowered in " ".join([
+                item.field_label,
+                item.field_key,
+                item.field_category,
+                str(item.proposed_value_json),
+                str(item.reviewed_value_json),
+                item.review_note or "",
+                *[
+                    f"{evidence.document_title} {evidence.excerpt}"
+                    for evidence in item.evidence
+                ],
+            ]).casefold()
+        ]
+    priority = {"conflicting": 0, "ambiguous": 1, "found": 2, "not_found": 3}
+    sorters = {
+        "priority": lambda item: (
+            priority.get(item.proposal_status, 4),
+            -item.confidence,
+            item.field_label.casefold(),
+        ),
+        "field_name": lambda item: item.field_label.casefold(),
+        "field_category": lambda item: item.field_category,
+        "confidence": lambda item: item.confidence,
+        "proposal_status": lambda item: item.proposal_status,
+        "review_status": lambda item: item.review_status,
+        "evidence_count": lambda item: len(item.evidence),
+    }
+    items.sort(
+        key=sorters[sort_by],
+        reverse=sort_direction == "desc",
+    )
+    total = len(items)
+    sliced = items[(page - 1) * page_size:page * page_size]
+    return ReviewQueueRead(
+        queue=queue,
+        total=total,
+        page=page,
+        page_size=page_size,
+        items=[ProposalRead.model_validate(item) for item in sliced],
+    )
+
+
 def refresh_documentation_coverage(run_id: int, db: Session) -> None:
     run = db.get(ProfileExtractionRun, run_id)
     proposals = list(db.scalars(select(ProfileFieldProposal).where(
         ProfileFieldProposal.extraction_run_id == run_id
     )))
-    valid = sum(
-        proposal.review_status in {
-            "accepted", "accepted_with_edit", "manually_entered",
-        }
-        or (
-            proposal.proposal_status in {"found", "derived"}
-            and proposal.review_status not in {"rejected", "deferred", "not_applicable"}
-        )
-        for proposal in proposals
-    )
     summary = dict(run.summary_json)
     summary["reviewed_value_count"] = sum(
         proposal.review_status != "pending" for proposal in proposals
     )
-    summary["documentation_coverage"] = round(valid / max(len(proposals), 1) * 100, 1)
     run.summary_json = summary
 
 
@@ -235,8 +630,198 @@ def review_proposal(proposal_id: int, payload: ProposalReview, db: Session = Dep
     db.add(AuditEvent(event_type=event, machine_profile_id=proposal.extraction_run.machine_profile_id,
                       metadata_json={"proposal_id": proposal.id, "field_key": proposal.field_key}))
     refresh_documentation_coverage(proposal.extraction_run_id, db)
+    summary = _review_summary(
+        proposal.extraction_run,
+        _proposals_for_run(proposal.extraction_run_id, db),
+        db,
+    )
+    if summary.draft_ready:
+        db.add(AuditEvent(
+            event_type="draft_readiness_reached",
+            machine_profile_id=proposal.extraction_run.machine_profile_id,
+            metadata_json={"run_id": proposal.extraction_run_id},
+        ))
     db.commit()
     return get_proposal(proposal.id, db)
+
+
+def _apply_batch_review(
+    run: ProfileExtractionRun,
+    payload: BatchReviewRequest,
+    db: Session,
+    *,
+    high_confidence_workflow: bool = False,
+) -> BatchReviewResponse:
+    requested_ids = list(dict.fromkeys(payload.proposal_ids))
+    proposals = {
+        item.id: item for item in _proposals_for_run(run.id, db)
+        if item.id in requested_ids
+    }
+    succeeded: list[int] = []
+    failed: list[BatchReviewFailure] = []
+    if payload.action == "accept" and not payload.confirmation.acknowledge_advisory_only:
+        failed = [
+            BatchReviewFailure(
+                proposal_id=proposal_id,
+                reason="advisory_acknowledgment_required",
+            )
+            for proposal_id in requested_ids
+        ]
+        return BatchReviewResponse(
+            succeeded=[],
+            failed=failed,
+            summary=_review_summary(run, _proposals_for_run(run.id, db), db),
+        )
+    status_by_action = {
+        "accept": "accepted",
+        "defer": "deferred",
+        "reject": "rejected",
+        "not_applicable": "not_applicable",
+    }
+    event_by_action = {
+        "accept": "profile_field_accepted",
+        "defer": "profile_field_deferred",
+        "reject": "profile_field_rejected",
+        "not_applicable": "profile_field_deferred",
+    }
+    for proposal_id in requested_ids:
+        proposal = proposals.get(proposal_id)
+        reason = None
+        if proposal is None:
+            reason = "proposal_not_in_run"
+        elif payload.action == "accept":
+            reason = _batch_accept_block_reason(proposal, run)
+        elif proposal.review_status != "pending":
+            reason = "already_reviewed"
+        if reason:
+            failed.append(BatchReviewFailure(
+                proposal_id=proposal_id,
+                reason=reason,
+            ))
+            continue
+        proposal.review_status = status_by_action[payload.action]
+        proposal.reviewed_value_json = (
+            proposal.proposed_value_json if payload.action == "accept" else None
+        )
+        proposal.review_note = (
+            "Accepted through protected high-confidence batch review."
+            if high_confidence_workflow
+            else f"Batch action: {payload.action}."
+        )
+        proposal.reviewed_by = "local_user"
+        proposal.reviewed_at = utc_now()
+        succeeded.append(proposal.id)
+        db.add(AuditEvent(
+            event_type=event_by_action[payload.action],
+            machine_profile_id=run.machine_profile_id,
+            metadata_json={
+                "proposal_id": proposal.id,
+                "field_key": proposal.field_key,
+                "batch": True,
+            },
+        ))
+    if succeeded:
+        db.add(AuditEvent(
+            event_type=(
+                "high_confidence_batch_reviewed"
+                if high_confidence_workflow
+                else "batch_review_applied"
+            ),
+            machine_profile_id=run.machine_profile_id,
+            metadata_json={
+                "run_id": run.id,
+                "action": payload.action,
+                "succeeded_ids": succeeded,
+                "failed_count": len(failed),
+            },
+        ))
+        refresh_documentation_coverage(run.id, db)
+        post_summary = _review_summary(run, _proposals_for_run(run.id, db), db)
+        if post_summary.draft_ready:
+            db.add(AuditEvent(
+                event_type="draft_readiness_reached",
+                machine_profile_id=run.machine_profile_id,
+                metadata_json={"run_id": run.id},
+            ))
+        db.commit()
+    return BatchReviewResponse(
+        succeeded=succeeded,
+        failed=failed,
+        summary=_review_summary(run, _proposals_for_run(run.id, db), db),
+    )
+
+
+@router.post(
+    "/profile-extraction-runs/{run_id}/proposals/batch-review",
+    response_model=BatchReviewResponse,
+)
+def batch_review_proposals(
+    run_id: int,
+    payload: BatchReviewRequest,
+    db: Session = Depends(get_db),
+):
+    run = db.get(ProfileExtractionRun, run_id)
+    if not run:
+        raise HTTPException(404, "Extraction run not found")
+    return _apply_batch_review(run, payload, db)
+
+
+@router.post(
+    "/profile-extraction-runs/{run_id}/accept-eligible-high-confidence",
+    response_model=BatchReviewResponse,
+)
+def accept_eligible_high_confidence(
+    run_id: int,
+    payload: AcceptEligibleHighConfidenceRequest,
+    db: Session = Depends(get_db),
+):
+    run = db.get(ProfileExtractionRun, run_id)
+    if not run:
+        raise HTTPException(404, "Extraction run not found")
+    proposals = _proposals_for_run(run.id, db)
+    proposal_ids = payload.proposal_ids or [
+        item.id for item in proposals
+        if item.review_status == "pending"
+        and item.confidence >= get_settings().profile_extraction_high_confidence
+    ]
+    if not proposal_ids:
+        raise HTTPException(422, "No high-confidence proposals were selected")
+    return _apply_batch_review(
+        run,
+        BatchReviewRequest(
+            proposal_ids=proposal_ids,
+            action="accept",
+            confirmation=payload.confirmation,
+        ),
+        db,
+        high_confidence_workflow=True,
+    )
+
+
+@router.post("/profile-extraction-runs/{run_id}/review-events", status_code=204)
+def record_review_event(
+    run_id: int,
+    payload: ReviewEventRequest,
+    db: Session = Depends(get_db),
+):
+    run = db.get(ProfileExtractionRun, run_id)
+    if not run:
+        raise HTTPException(404, "Extraction run not found")
+    metadata = {
+        "run_id": run.id,
+        "queue": payload.queue,
+        "proposal_id": payload.proposal_id,
+        "document_id": payload.document_id,
+        "selected_count": payload.selected_count,
+    }
+    db.add(AuditEvent(
+        event_type=payload.event_type,
+        machine_profile_id=run.machine_profile_id,
+        metadata_json={
+            key: value for key, value in metadata.items() if value is not None
+        },
+    ))
+    db.commit()
 
 
 def _revision_data(revision: MachineProfileRevision) -> dict:

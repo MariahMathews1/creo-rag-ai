@@ -11,6 +11,7 @@ import type {
   ManualSession,
   CLRecord, GCodeBlock, AlignmentRun, AlignmentLink, AlignmentIssue,
   ProfileExtractionRun, ProfileProposal, MachineProfileRevision,
+  ProfileReviewQueue, ProfileReviewSummary, BatchReviewResult,
 } from "../types";
 
 const API_BASE_URL =
@@ -180,7 +181,52 @@ export const api = {
   getProfileExtraction: (runId: number) =>
     request<ProfileExtractionRun>(`/profile-extraction-runs/${runId}`),
   listProfileProposals: (runId: number) =>
-    request<ProfileProposal[]>(`/profile-extraction-runs/${runId}/proposals`),
+    request<ProfileProposal[]>(
+      `/profile-extraction-runs/${runId}/proposals?page_size=250`,
+    ),
+  getProfileReviewSummary: (runId: number) =>
+    request<ProfileReviewSummary>(
+      `/profile-extraction-runs/${runId}/review-summary`,
+    ),
+  getProfileReviewQueue: (runId: number, params: URLSearchParams) =>
+    request<ProfileReviewQueue>(
+      `/profile-extraction-runs/${runId}/review-queue?${params.toString()}`,
+    ),
+  batchReviewProfileProposals: (
+    runId: number,
+    proposalIds: number[],
+    action: "accept" | "defer" | "reject" | "not_applicable",
+  ) => request<BatchReviewResult>(
+    `/profile-extraction-runs/${runId}/proposals/batch-review`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        proposal_ids: proposalIds,
+        action,
+        confirmation: { acknowledge_advisory_only: action === "accept" },
+      }),
+    },
+  ),
+  acceptEligibleHighConfidence: (runId: number, proposalIds: number[]) =>
+    request<BatchReviewResult>(
+      `/profile-extraction-runs/${runId}/accept-eligible-high-confidence`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          proposal_ids: proposalIds,
+          confirmation: { acknowledge_advisory_only: true },
+        }),
+      },
+    ),
+  recordProfileReviewEvent: (
+    runId: number,
+    payload: {
+      event_type: string; queue?: string; proposal_id?: number;
+      document_id?: number; selected_count?: number;
+    },
+  ) => request<void>(`/profile-extraction-runs/${runId}/review-events`, {
+    method: "POST", body: JSON.stringify(payload),
+  }),
   rerunProfileExtraction: (runId: number, selectedVariant?: string) =>
     request<ProfileExtractionRun>(
       `/profile-extraction-runs/${runId}/rerun${selectedVariant ? `?selected_machine_variant=${encodeURIComponent(selectedVariant)}` : ""}`,

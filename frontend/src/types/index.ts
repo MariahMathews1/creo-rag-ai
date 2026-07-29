@@ -221,6 +221,35 @@ export interface ProfileExtractionRun {
   advisory_only: true; machine_profile_is_draft: true; qualified_review_required: true;
   safety_notice: string;
 }
+export interface ReviewCategorySummary {
+  category: string; total: number; reviewed: number; pending: number;
+  conflicts: number; complete: boolean;
+}
+export interface ProfileReviewSummary {
+  run_id: number; machine_profile_id: number; machine_name: string;
+  selected_variant: string | null; run_status: string; documents_analyzed: number;
+  total: number; found: number; not_found: number; conflicting: number;
+  ambiguous: number; pending: number; accepted: number;
+  accepted_with_edit: number; rejected: number; deferred: number;
+  manually_entered: number; not_applicable: number; found_pending: number;
+  not_found_pending: number; conflict_pending: number; ambiguous_pending: number;
+  high_confidence_eligible: number; safety_low_confidence_pending: number;
+  remaining_required_review: number; reviewed: number;
+  review_progress_percent: number; documentation_coverage: number;
+  category_summaries: ReviewCategorySummary[]; draft_ready: boolean;
+  approval_ready: boolean; variant_rerun_required: boolean;
+  readiness_reasons: string[]; recommended_next_queue: string | null;
+  confidence_high_threshold: number; confidence_medium_threshold: number;
+}
+export interface ProfileReviewQueue {
+  queue: string; total: number; page: number; page_size: number;
+  items: ProfileProposal[];
+}
+export interface BatchReviewResult {
+  succeeded: number[];
+  failed: Array<{ proposal_id: number; reason: string }>;
+  summary: ProfileReviewSummary;
+}
 export interface MachineProfileRevision {
   id: number; machine_profile_id: number; revision_number: number; status: string;
   source_type: string; name: string; manufacturer: string | null; model: string | null;

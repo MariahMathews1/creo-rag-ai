@@ -43,6 +43,13 @@ immutable analysis snapshots, deterministic field-specific extraction, real
 document/chunk citations, conflict and variant handling, per-field review and
 provenance, neutral revision comparison, and explicit approval.
 
+The review workspace provides risk-first queues, search and advanced filters,
+category completion, detailed/compact/checklist views, keyboard review,
+URL-restorable state, in-context source evidence, protected batch dispositions,
+and server-owned draft readiness. See
+[the review UX guide](docs/profile-extraction-review-ux.md) and
+[the audit](docs/phase-5-review-ux-audit.md).
+
 ```bash
 make migrate
 cd backend
@@ -182,6 +189,10 @@ npm run build
 | `POST` | `/api/machines/{id}/explain-command` | Explain from machine manuals |
 | `POST/GET` | `/api/machines/{id}/profile-extraction-runs` | Start/list extraction runs |
 | `GET` | `/api/profile-extraction-runs/{id}/proposals` | Filter citation-backed proposals |
+| `GET` | `/api/profile-extraction-runs/{id}/review-summary` | Authoritative review counts and readiness |
+| `GET` | `/api/profile-extraction-runs/{id}/review-queue` | Search, filter, sort, and page review work |
+| `POST` | `/api/profile-extraction-runs/{id}/proposals/batch-review` | Apply a protected batch disposition |
+| `POST` | `/api/profile-extraction-runs/{id}/accept-eligible-high-confidence` | Accept only server-eligible high-confidence fields |
 | `PUT` | `/api/profile-field-proposals/{id}/review` | Record a field disposition |
 | `POST` | `/api/profile-extraction-runs/{id}/apply-to-draft` | Create an inactive reviewed revision |
 | `POST` | `/api/profile-extraction-runs/{id}/rerun` | Preserve and re-run extraction |

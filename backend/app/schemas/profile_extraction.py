@@ -92,6 +92,104 @@ class ProposalReview(BaseModel):
     review_note: str | None = Field(default=None, max_length=2000)
 
 
+class ReviewCategorySummary(BaseModel):
+    category: str
+    total: int
+    reviewed: int
+    pending: int
+    conflicts: int
+    complete: bool
+
+
+class ReviewSummaryRead(BaseModel):
+    run_id: int
+    machine_profile_id: int
+    machine_name: str
+    selected_variant: str | None
+    run_status: str
+    documents_analyzed: int
+    total: int
+    found: int
+    not_found: int
+    conflicting: int
+    ambiguous: int
+    pending: int
+    accepted: int
+    accepted_with_edit: int
+    rejected: int
+    deferred: int
+    manually_entered: int
+    not_applicable: int
+    found_pending: int
+    not_found_pending: int
+    conflict_pending: int
+    ambiguous_pending: int
+    high_confidence_eligible: int
+    safety_low_confidence_pending: int
+    remaining_required_review: int
+    reviewed: int
+    review_progress_percent: float
+    documentation_coverage: float
+    category_summaries: list[ReviewCategorySummary]
+    draft_ready: bool
+    approval_ready: bool
+    variant_rerun_required: bool
+    readiness_reasons: list[str]
+    recommended_next_queue: str | None
+    confidence_high_threshold: float
+    confidence_medium_threshold: float
+
+
+class ReviewQueueRead(BaseModel):
+    queue: str
+    total: int
+    page: int
+    page_size: int
+    items: list[ProposalRead]
+
+
+class BatchReviewConfirmation(BaseModel):
+    acknowledge_advisory_only: bool = False
+
+
+class BatchReviewRequest(BaseModel):
+    proposal_ids: list[int] = Field(min_length=1, max_length=500)
+    action: str = Field(pattern="^(accept|defer|reject|not_applicable)$")
+    confirmation: BatchReviewConfirmation = Field(
+        default_factory=BatchReviewConfirmation
+    )
+
+
+class BatchReviewFailure(BaseModel):
+    proposal_id: int
+    reason: str
+
+
+class BatchReviewResponse(BaseModel):
+    succeeded: list[int]
+    failed: list[BatchReviewFailure]
+    summary: ReviewSummaryRead
+
+
+class AcceptEligibleHighConfidenceRequest(BaseModel):
+    proposal_ids: list[int] | None = Field(default=None, max_length=500)
+    confirmation: BatchReviewConfirmation
+
+
+class ReviewEventRequest(BaseModel):
+    event_type: str = Field(
+        pattern=(
+            "^(review_queue_opened|field_batch_selected|source_drawer_opened|"
+            "source_drawer_closed|guided_review_started|guided_review_completed|"
+            "review_filter_changed)$"
+        )
+    )
+    queue: str | None = Field(default=None, max_length=50)
+    proposal_id: int | None = None
+    document_id: int | None = None
+    selected_count: int | None = Field(default=None, ge=0, le=500)
+
+
 class ApplyDraftRequest(BaseModel):
     base_strategy: str = Field(pattern="^(active|blank|selected_revision)$")
     source_revision_id: int | None = None
