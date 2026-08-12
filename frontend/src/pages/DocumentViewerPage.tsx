@@ -23,7 +23,7 @@ export function DocumentViewerPage() {
   if (error) return <section className="page"><p className="form-error">{error}</p></section>;
   if (!content) return <section className="page"><p className="loading">Loading extracted document…</p></section>;
   return <section className="page">
-    <PageHeader eyebrow="Extracted source" title={content.document.title} description={`${content.document.document_type.replaceAll("_", " ")} · ${content.document.original_filename}`} action={<Link className="button secondary" to={`/documents?machine=${content.document.machine_profile_id}`}>← Document library</Link>} />
+    <PageHeader eyebrow="Extracted source" title={content.document.title} description={`${content.document.document_type.replaceAll("_", " ")} · ${content.document.original_filename}`} action={<div className="header-actions"><Link className="button secondary" to={`/gpost?machine=${content.document.machine_profile_id}&document=${content.document.id}`}>Use as G-POST Reference</Link><Link className="button secondary" to={`/documents?machine=${content.document.machine_profile_id}`}>← Document library</Link></div>} />
     <div className="viewer-meta"><span className={`document-status ${content.document.processing_status}`}>{content.document.processing_status}</span><span>{content.document.page_count ?? 0} pages</span><label>Find in page<input value={query} onChange={(event) => setQuery(event.target.value)} /></label></div>
     <div className="viewer-grid">
       <aside className="page-nav" aria-label="Document pages">{content.pages.map((item) => <button className={item.page_number === page ? "active" : ""} key={item.page_number} onClick={() => setPage(item.page_number)}>Page {item.page_number}<small>{item.character_count.toLocaleString()} characters</small></button>)}</aside>
@@ -32,4 +32,3 @@ export function DocumentViewerPage() {
     </div>
   </section>;
 }
-

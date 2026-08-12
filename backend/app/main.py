@@ -10,6 +10,7 @@ from app.api.machine_profiles import router as machine_profiles_router
 from app.api.traceability import router as traceability_router
 from app.api.profile_extraction import router as profile_extraction_router
 from app.api.program_standards import router as program_standards_router
+from app.api.gpost import router as gpost_router
 from app.core.config import get_settings
 from app.db.alembic import upgrade_database
 from app.db.session import engine
@@ -44,6 +45,7 @@ app.include_router(manual_router, prefix=settings.api_prefix)
 app.include_router(traceability_router, prefix=settings.api_prefix)
 app.include_router(profile_extraction_router, prefix=settings.api_prefix)
 app.include_router(program_standards_router, prefix=settings.api_prefix)
+app.include_router(gpost_router, prefix=settings.api_prefix)
 
 
 @app.get("/api/health", tags=["health"])

@@ -2,9 +2,10 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const links = [
   { to: "/", label: "Dashboard", glyph: "▦" },
-  { to: "/machines", label: "Machine profiles", glyph: "◆" },
-  { to: "/analysis/new", label: "New analysis", glyph: "+" },
+  { to: "/machines", label: "Machines", glyph: "◆" },
   { to: "/documents", label: "Documents", glyph: "▤" },
+  { to: "/analysis/new", label: "Analysis", glyph: "+" },
+  { to: "/gpost", label: "G-POST Generator", glyph: "⚙" },
   { to: "/manual-assistant", label: "Manual Assistant", glyph: "?" },
 ];
 

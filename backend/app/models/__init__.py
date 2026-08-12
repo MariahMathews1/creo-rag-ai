@@ -21,6 +21,10 @@ from app.models.program_standards import (
     ProgramComparisonRun, ReferenceProgram, ReferenceProgramBlock,
     StandardConvention, StandardConventionEvidence, StandardExtractionRun,
 )
+from app.models.gpost import (
+    GPostDraft, GPostDraftVersion, GPostMapping, GPostMappingEvidence,
+    GPostPreviewRun,
+)
 
 __all__ = [
     "AnalysisFinding", "AnalysisProject", "AnswerCitation", "AuditEvent",
@@ -33,4 +37,6 @@ __all__ = [
     "OrganizationalStandardProfile", "StandardConvention",
     "StandardConventionEvidence", "ProgramComparisonRun",
     "ProgramComparisonFinding",
+    "GPostDraft", "GPostDraftVersion", "GPostMapping",
+    "GPostMappingEvidence", "GPostPreviewRun",
 ]

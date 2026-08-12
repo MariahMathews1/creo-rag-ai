@@ -14,6 +14,7 @@ import type {
   ProfileReviewQueue, ProfileReviewSummary, BatchReviewResult,
   ReferenceProgram, StandardConvention, StandardExtractionRun, StandardProfile,
   ProgramComparison, SimilarProgram, SideBySideComparison, ComparisonFinding,
+  GPostDraft, GPostMapping, GPostPreview, GPostVersionDiff,
 } from "../types";
 
 const API_BASE_URL =
@@ -369,4 +370,47 @@ export const api = {
     `${API_BASE_URL}/standard-profiles/${standardId}/report?format=${format}`,
   comparisonReportUrl: (comparisonId: number, format = "markdown") =>
     `${API_BASE_URL}/standard-comparisons/${comparisonId}/report?format=${format}`,
+  listGPostDrafts: (machineId: number) =>
+    request<GPostDraft[]>(`/machines/${machineId}/gpost-drafts`),
+  getGPostDraft: (draftId: number) => request<GPostDraft>(`/gpost-drafts/${draftId}`),
+  createGPostDraft: (machineId: number, payload: {
+    machine_profile_revision_id: number; name: string; controller_family: string;
+    selected_document_ids: number[]; standard_profile_id?: number;
+    reference_program_ids: number[];
+  }) => request<GPostDraft>(`/machines/${machineId}/gpost-drafts`, {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  updateGPostDraft: (draftId: number, payload: Record<string, unknown>) =>
+    request<GPostDraft>(`/gpost-drafts/${draftId}`, {
+      method: "PUT", body: JSON.stringify(payload),
+    }),
+  createGPostVersion: (draftId: number) => request<GPostDraft>(
+    `/gpost-drafts/${draftId}/versions`, { method: "POST" },
+  ),
+  archiveGPostDraft: (draftId: number) => request<GPostDraft>(
+    `/gpost-drafts/${draftId}/archive`, { method: "POST" },
+  ),
+  listGPostMappings: (draftId: number) =>
+    request<GPostMapping[]>(`/gpost-drafts/${draftId}/mappings`),
+  updateGPostMapping: (mappingId: number, payload: Record<string, unknown>) =>
+    request<GPostMapping>(`/gpost-mappings/${mappingId}`, {
+      method: "PUT", body: JSON.stringify(payload),
+    }),
+  addGPostEvidence: (mappingId: number, payload: Record<string, unknown>) =>
+    request(`/gpost-mappings/${mappingId}/evidence`, {
+      method: "POST", body: JSON.stringify(payload),
+    }),
+  previewGPost: (draftId: number, clSource: string) =>
+    request<GPostPreview>(`/gpost-drafts/${draftId}/preview`, {
+      method: "POST", body: JSON.stringify({ cl_source: clSource }),
+    }),
+  compareGPostVersions: (draftId: number, otherDraftId: number) =>
+    request<GPostVersionDiff>(`/gpost-drafts/${draftId}/compare/${otherDraftId}`),
+  validateGPostForRnd: (draftId: number) => request<GPostDraft>(
+    `/gpost-drafts/${draftId}/validate-for-rnd`, {
+      method: "POST", body: JSON.stringify({ acknowledge_rnd_only: true }),
+    },
+  ),
+  gpostExportUrl: (draftId: number, format: "json" | "markdown") =>
+    `${API_BASE_URL}/gpost-drafts/${draftId}/export?format=${format}`,
 };

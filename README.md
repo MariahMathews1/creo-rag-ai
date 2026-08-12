@@ -28,7 +28,7 @@ used to operate machinery.
 
 ## 1. Project status
 
-This repository contains a working proof of concept through Phase 6:
+This repository contains a working proof of concept through Phase 7:
 
 | Phase | Capability | Current state |
 | --- | --- | --- |
@@ -39,6 +39,7 @@ This repository contains a working proof of concept through Phase 6:
 | 5 | Citation-backed machine-profile extraction and revision governance | Implemented |
 | 5 UX | Guided queues, filters, batch safeguards, evidence drawer, URL state | Implemented |
 | 6 | Approved-program governance, standard extraction, and comparison | Implemented |
+| 7 | Machine-scoped G-POST draft generation, review, preview, and versioning | Implemented |
 
 This is not production software. Authentication, authorization, enterprise
 document control, encrypted program storage, formal electronic signatures,
@@ -50,11 +51,11 @@ outside the current proof-of-concept boundary.
 At the time of this handoff:
 
 ```text
-Backend: 58 tests passing
-Frontend: 31 tests passing
+Backend: 65 tests passing
+Frontend: 39 tests passing
 Frontend TypeScript check: passing
 Frontend production build: passing
-Database migration head: 20260729_01
+Database migration head: 20260811_01
 ```
 
 ---
@@ -85,6 +86,10 @@ The major workflows are:
 20. Retrieve similar eligible references and inspect side-by-side differences.
 21. Classify intentional exceptions without automatically changing the standard.
 22. Export traceability, standard, and comparison reports.
+23. Create a versioned, machine-scoped G-POST R&D draft.
+24. Review CL mappings and supporting document, standard, and reference evidence.
+25. Generate advisory G-code, reparse it, run deterministic validation, and inspect block traceability.
+26. Compare draft versions and export explicitly non-production JSON or Markdown.
 
 ---
 

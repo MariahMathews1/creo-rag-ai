@@ -14,6 +14,8 @@ import { ProfileRevisionsPage } from "./pages/ProfileRevisionsPage";
 import { ReferenceProgramsPage } from "./pages/ReferenceProgramsPage";
 import { StandardExtractionReviewPage } from "./pages/StandardExtractionReviewPage";
 import { ApprovedProgramComparisonPage } from "./pages/ApprovedProgramComparisonPage";
+import { GPostGeneratorPage } from "./pages/GPostGeneratorPage";
+import { GPostWorkspacePage } from "./pages/GPostWorkspacePage";
 
 export default function App() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="documents/:documentId" element={<DocumentViewerPage />} />
           <Route path="manual-assistant" element={<ManualAssistantPage />} />
+          <Route path="gpost" element={<GPostGeneratorPage />} />
+          <Route path="gpost/:draftId" element={<GPostWorkspacePage />} />
           <Route path="machines/:machineId/profile-extraction/new" element={<ProfileExtractionSetupPage />} />
           <Route path="machines/:machineId/profile-extraction/:runId" element={<ProfileExtractionReviewPage />} />
           <Route path="machines/:machineId/revisions" element={<ProfileRevisionsPage />} />

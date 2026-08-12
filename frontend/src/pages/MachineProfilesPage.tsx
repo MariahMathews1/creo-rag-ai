@@ -69,7 +69,7 @@ export function MachineProfilesPage() {
             <article className="profile-card" key={profile.id}>
               <div className="profile-card-head">
                 <div><span className="machine-type">{profile.machine_type}</span><h2>{profile.name}</h2><p>{profile.manufacturer} {profile.model} · {profile.controller_name}</p></div>
-                <div className="card-actions"><Link to={`/machines/${profile.id}/profile-extraction/new`}>Extract from documents</Link><Link to={`/machines/${profile.id}/reference-programs`}>Approved programs</Link><Link to={`/machines/${profile.id}/revisions`}>Revisions</Link><button onClick={() => { setEditing(profile); setShowForm(true); }}>Edit</button><button className="danger-link" onClick={() => void remove(profile)}>Delete</button></div>
+                <div className="card-actions"><Link to={`/machines/${profile.id}/profile-extraction/new`}>Extract from documents</Link><Link to={`/machines/${profile.id}/reference-programs`}>Approved programs</Link><Link to={`/machines/${profile.id}/revisions`}>Revisions</Link><Link to={`/gpost?machine=${profile.id}`}>G-POST</Link><button onClick={() => { setEditing(profile); setShowForm(true); }}>Edit</button><button className="danger-link" onClick={() => void remove(profile)}>Delete</button></div>
               </div>
               <div className="limits-row">
                 <span><small>X travel</small>{profile.x_min ?? "—"} to {profile.x_max ?? "—"}</span>

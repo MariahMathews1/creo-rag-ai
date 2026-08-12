@@ -32,7 +32,7 @@ dev-frontend:
 	cd frontend && npm run dev
 
 test:
-	cd backend && .venv/bin/pytest
+	cd backend && .venv/bin/python -m pytest
 	cd frontend && npm run lint && npm run typecheck && npm test
 
 build:

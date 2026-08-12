@@ -262,6 +262,9 @@ export interface MachineProfileRevision {
   z_min: number | null; z_max: number | null; max_spindle_rpm: number | null;
   max_feed_rate: number | null; rapid_traverse_rate: number | null;
   supported_work_offsets_json: string[]; restricted_commands_json: string[];
+  approved_g_codes_json?: string[]; approved_m_codes_json?: string[];
+  tool_change_template?: string | null; min_spindle_rpm?: number | null;
+  units?: string | null; notes?: string | null;
   safe_start_template: string | null; program_end_template: string | null;
   capabilities_json: Record<string, unknown>; machine_configuration_json: Record<string, unknown>;
   review_summary: string | null; approved_at: string | null;
@@ -346,4 +349,52 @@ export interface SideBySideComparison {
   deterministic_findings: Array<Record<string, unknown>>;
   convention_findings: ComparisonFinding[];
   safety_notice: string;
+}
+
+export interface GPostDraft {
+  id: number; machine_profile_id: number; machine_profile_revision_id: number;
+  created_from_draft_id: number | null; name: string; version: number;
+  status: "draft" | "under_review" | "review_required" | "validated_for_rnd" | "superseded" | "archived";
+  controller_family: string; machine_type: string;
+  selected_document_ids_json: number[]; standard_profile_id: number | null;
+  reference_program_ids_json: number[]; capability_snapshot_json: Record<string, unknown>;
+  machine_profile_snapshot_json: Record<string, unknown>; templates_json: Record<string, string>;
+  unsupported_features_json: string[]; warnings_json: Array<Record<string, unknown>>;
+  review_summary_json: Record<string, number>; created_at: string; updated_at: string;
+  superseded_at: string | null; advisory_only: true; safety_notice: string;
+}
+
+export interface GPostEvidence {
+  id: number; source_type: string; document_id: number | null;
+  document_chunk_id: number | null; reference_program_id: number | null;
+  standard_convention_id: number | null; page: number | null;
+  section: string | null; excerpt: string | null; authority_level: string | null;
+  metadata_json: Record<string, unknown>;
+}
+
+export interface GPostMapping {
+  id: number; gpost_draft_id: number; mapping_key: string; cl_command: string;
+  mapping_type: string; output_template: string | null;
+  conditions_json: Record<string, unknown>; required_state_json: Record<string, unknown>;
+  resulting_state_json: Record<string, unknown>; machine_type_scope: string | null;
+  dialect_scope: string | null; supported: boolean; confidence: number | null;
+  source_type: string; source_document_id: number | null; source_chunk_id: number | null;
+  source_page: number | null; source_section: string | null; source_excerpt: string | null;
+  source_authority: string | null; review_status: string; review_note: string | null;
+  evidence: GPostEvidence[]; created_at: string; updated_at: string;
+}
+
+export interface GPostPreview {
+  id: number; gpost_draft_id: number; status: string; generated_gcode: string;
+  parser_diagnostics_json: string[]; deterministic_findings_json: Array<Record<string, unknown>>;
+  unsupported_commands_json: Array<Record<string, unknown>>;
+  missing_mappings_json: Array<Record<string, unknown>>; warnings_json: Array<Record<string, unknown>>;
+  traceability_json: Array<Record<string, unknown>>; summary_json: Record<string, unknown>;
+  parser_version: string; rule_set_version: string; created_at: string; safety_notice: string;
+}
+
+export interface GPostVersionDiff {
+  left_draft_id: number; right_draft_id: number; mappings_added: string[];
+  mappings_removed: string[]; templates_changed: string[]; conditions_changed: string[];
+  evidence_changed: string[]; warnings_added: unknown[]; warnings_resolved: unknown[];
 }
