@@ -1426,6 +1426,8 @@ A reproduction is functionally close only when it can:
 
 ## 21. Documentation index
 
+G-POST V1 uses shared configuration templates as the source of truth. CL/NCL mappings reference those templates and create local output text only through an explicit override. Support status and engineer review status are separate, and readiness focuses on applicable required V1 behavior.
+
 - [Architecture](docs/architecture.md)
 - [Document processing](docs/document-processing.md)
 - [Retrieval and citations](docs/retrieval-and-citations.md)
@@ -1445,6 +1447,11 @@ A reproduction is functionally close only when it can:
 - [Program comparison](docs/program-comparison.md)
 - [Phase 6 audit](docs/phase-6-audit.md)
 - [Phase 6 manual checklist](docs/phase-6-manual-test-checklist.md)
+- [G-POST V1 scope](docs/gpost-v1-scope.md)
+- [G-POST template/mapping model](docs/gpost-template-mapping-model.md)
+- [G-POST review semantics](docs/gpost-review-semantics.md)
+- [G-POST support statuses](docs/gpost-support-statuses.md)
+- [G-POST readiness](docs/gpost-readiness.md)
 
 ---
 

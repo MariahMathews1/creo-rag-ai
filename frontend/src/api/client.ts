@@ -376,7 +376,7 @@ export const api = {
   createGPostDraft: (machineId: number, payload: {
     machine_profile_revision_id: number; name: string; controller_family: string;
     selected_document_ids: number[]; standard_profile_id?: number;
-    reference_program_ids: number[];
+    reference_program_ids: number[]; manual_configuration_acknowledged?: boolean;
   }) => request<GPostDraft>(`/machines/${machineId}/gpost-drafts`, {
     method: "POST", body: JSON.stringify(payload),
   }),
@@ -396,6 +396,8 @@ export const api = {
     request<GPostMapping>(`/gpost-mappings/${mappingId}`, {
       method: "PUT", body: JSON.stringify(payload),
     }),
+  resetGPostMappingOverride: (mappingId: number) =>
+    request<GPostMapping>(`/gpost-mappings/${mappingId}/reset-override`, { method: "POST" }),
   addGPostEvidence: (mappingId: number, payload: Record<string, unknown>) =>
     request(`/gpost-mappings/${mappingId}/evidence`, {
       method: "POST", body: JSON.stringify(payload),

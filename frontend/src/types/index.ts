@@ -357,7 +357,8 @@ export interface GPostDraft {
   status: "draft" | "under_review" | "review_required" | "validated_for_rnd" | "superseded" | "archived";
   controller_family: string; machine_type: string;
   selected_document_ids_json: number[]; standard_profile_id: number | null;
-  reference_program_ids_json: number[]; capability_snapshot_json: Record<string, unknown>;
+  reference_program_ids_json: number[]; manual_configuration_acknowledged: boolean;
+  capability_snapshot_json: Record<string, unknown>;
   machine_profile_snapshot_json: Record<string, unknown>; templates_json: Record<string, string>;
   unsupported_features_json: string[]; warnings_json: Array<Record<string, unknown>>;
   review_summary_json: Record<string, number>; created_at: string; updated_at: string;
@@ -375,6 +376,10 @@ export interface GPostEvidence {
 export interface GPostMapping {
   id: number; gpost_draft_id: number; mapping_key: string; cl_command: string;
   mapping_type: string; output_template: string | null;
+  template_key: string | null; template_override: string | null; uses_override: boolean;
+  effective_output_template: string | null;
+  support_status: "supported" | "not_applicable" | "unsupported_required" | "not_implemented";
+  required_for_v1: boolean; description: string | null;
   conditions_json: Record<string, unknown>; required_state_json: Record<string, unknown>;
   resulting_state_json: Record<string, unknown>; machine_type_scope: string | null;
   dialect_scope: string | null; supported: boolean; confidence: number | null;

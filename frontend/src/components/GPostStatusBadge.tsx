@@ -13,6 +13,13 @@ const STATUS_LABELS: Record<string, string> = {
   deferred: "Deferred",
   conflict: "Conflict",
   unsupported: "Unsupported",
+  unsupported_required: "Blocking",
+  "unsupported-required": "Blocking",
+  not_applicable: "Not Applicable",
+  "not-applicable": "Not Applicable",
+  not_implemented: "Not Implemented",
+  "not-implemented": "Not Implemented",
+  inherited: "Inherited",
 };
 
 export function GPostStatusBadge({ status, large = false }: { status: string; large?: boolean }) {

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -22,6 +22,7 @@ class GPostDraft(Base):
     selected_document_ids_json: Mapped[list] = mapped_column(JSON, default=list)
     standard_profile_id: Mapped[int | None] = mapped_column(ForeignKey("organizational_standard_profiles.id"), nullable=True)
     reference_program_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    manual_configuration_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
     capability_snapshot_json: Mapped[dict] = mapped_column(JSON, default=dict)
     machine_profile_snapshot_json: Mapped[dict] = mapped_column(JSON, default=dict)
     templates_json: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -56,6 +57,12 @@ class GPostMapping(Base):
     cl_command: Mapped[str] = mapped_column(String(40), index=True)
     mapping_type: Mapped[str] = mapped_column(String(30))
     output_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    template_key: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    template_override: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uses_override: Mapped[bool] = mapped_column(Boolean, default=False)
+    support_status: Mapped[str] = mapped_column(String(30), default="supported", index=True)
+    required_for_v1: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    description: Mapped[str | None] = mapped_column(String(240), nullable=True)
     conditions_json: Mapped[dict] = mapped_column(JSON, default=dict)
     required_state_json: Mapped[dict] = mapped_column(JSON, default=dict)
     resulting_state_json: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -77,6 +84,14 @@ class GPostMapping(Base):
 
     draft: Mapped[GPostDraft] = relationship(back_populates="mappings")
     evidence: Mapped[list["GPostMappingEvidence"]] = relationship(back_populates="mapping", cascade="all, delete-orphan")
+
+    @property
+    def effective_output_template(self) -> str | None:
+        if self.uses_override:
+            return self.template_override
+        if self.template_key and self.draft:
+            return self.draft.templates_json.get(self.template_key)
+        return self.output_template
 
 
 class GPostMappingEvidence(Base):

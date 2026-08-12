@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 DraftStatus = Literal["draft", "under_review", "review_required", "validated_for_rnd", "superseded", "archived"]
 MappingType = Literal["direct", "stateful", "conditional", "template", "cycle", "unsupported", "manual"]
 ReviewStatus = Literal["pending", "accepted", "accepted_with_edit", "rejected", "deferred"]
+SupportStatus = Literal["supported", "not_applicable", "unsupported_required", "not_implemented"]
 
 
 class GPostDraftCreate(BaseModel):
@@ -16,6 +17,7 @@ class GPostDraftCreate(BaseModel):
     selected_document_ids: list[int] = Field(default_factory=list)
     standard_profile_id: int | None = None
     reference_program_ids: list[int] = Field(default_factory=list)
+    manual_configuration_acknowledged: bool = False
 
 
 class GPostDraftUpdate(BaseModel):
@@ -25,6 +27,7 @@ class GPostDraftUpdate(BaseModel):
     standard_profile_id: int | None = None
     reference_program_ids: list[int] | None = None
     templates_json: dict[str, str] | None = None
+    manual_configuration_acknowledged: bool | None = None
 
 
 class GPostEvidenceRead(BaseModel):
@@ -60,6 +63,12 @@ class GPostMappingBase(BaseModel):
     cl_command: str = Field(min_length=1, max_length=40)
     mapping_type: MappingType
     output_template: str | None = None
+    template_key: str | None = None
+    template_override: str | None = None
+    uses_override: bool = False
+    support_status: SupportStatus = "supported"
+    required_for_v1: bool = False
+    description: str | None = None
     conditions_json: dict = Field(default_factory=dict)
     required_state_json: dict = Field(default_factory=dict)
     resulting_state_json: dict = Field(default_factory=dict)
@@ -79,7 +88,9 @@ class GPostMappingBase(BaseModel):
 
     @model_validator(mode="after")
     def unsupported_has_no_template(self):
-        if self.mapping_type == "unsupported":
+        if self.mapping_type == "unsupported" and self.support_status == "supported":
+            self.support_status = "not_implemented"
+        if self.support_status != "supported":
             self.supported = False
         return self
 
@@ -93,6 +104,12 @@ class GPostMappingUpdate(BaseModel):
     cl_command: str | None = None
     mapping_type: MappingType | None = None
     output_template: str | None = None
+    template_key: str | None = None
+    template_override: str | None = None
+    uses_override: bool | None = None
+    support_status: SupportStatus | None = None
+    required_for_v1: bool | None = None
+    description: str | None = None
     conditions_json: dict | None = None
     required_state_json: dict | None = None
     resulting_state_json: dict | None = None
@@ -118,6 +135,7 @@ class GPostMappingRead(GPostMappingBase):
     evidence: list[GPostEvidenceRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    effective_output_template: str | None = None
 
 
 class GPostDraftRead(BaseModel):
@@ -134,6 +152,7 @@ class GPostDraftRead(BaseModel):
     selected_document_ids_json: list[int]
     standard_profile_id: int | None
     reference_program_ids_json: list[int]
+    manual_configuration_acknowledged: bool
     capability_snapshot_json: dict
     machine_profile_snapshot_json: dict
     templates_json: dict

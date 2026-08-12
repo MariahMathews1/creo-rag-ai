@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.session import get_db
 from app.gpost.service import (
     SAFETY_NOTICE, audit, capability_snapshot, compare_drafts, default_templates,
-    family_compatible, generate_preview, initial_mappings, markdown_export,
+    controller_family_compatible, family_compatible, generate_preview, initial_mappings, markdown_export, review_summary,
     revision_snapshot, snapshot_draft, validate_ownership,
 )
 from app.models.entities import DocumentChunk, MachineProfile, SourceDocument, utc_now
@@ -57,7 +57,9 @@ def create_draft(machine_id: int, payload: GPostDraftCreate, db: Session = Depen
     templates = default_templates(revision, payload.controller_family)
     warnings = []
     if not family_compatible(machine_type, payload.controller_family):
-        warnings.append({"category": "Blocking Configuration Issue", "message": "Machine type and controller template family conflict."})
+        warnings.append({"category": "Blocking Setup Issue", "code": "GPOST_TEMPLATE_FAMILY_MISMATCH", "message": "Machine type and controller template family conflict."})
+    if not controller_family_compatible(revision, payload.controller_family):
+        warnings.append({"category": "Blocking Setup Issue", "code": "GPOST_CONTROLLER_FAMILY_MISMATCH", "message": "Controller identity and controller template family conflict."})
     capabilities = capability_snapshot(revision)
     if capabilities["unknown_capabilities"]:
         warnings.append({"category": "Missing Documentation", "message": "Unknown capabilities: " + ", ".join(capabilities["unknown_capabilities"])})
@@ -68,17 +70,19 @@ def create_draft(machine_id: int, payload: GPostDraftCreate, db: Session = Depen
         selected_document_ids_json=payload.selected_document_ids,
         standard_profile_id=payload.standard_profile_id,
         reference_program_ids_json=payload.reference_program_ids,
+        manual_configuration_acknowledged=payload.manual_configuration_acknowledged,
         capability_snapshot_json=capabilities,
         machine_profile_snapshot_json=revision_snapshot(revision, machine),
         templates_json=templates,
         unsupported_features_json=sorted(["CIRCLE", "ARC", "CYCLE", "CUTCOM", "MULTAX", "TLAXIS", "GOHOME", "OPSTOP"]),
         warnings_json=warnings,
-        review_summary_json={"pending": 9, "accepted": 0, "unsupported": 8},
+        review_summary_json={},
     )
     db.add(draft); db.flush()
     db.add_all(initial_mappings(draft))
     db.flush()
     mappings = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == draft.id)))
+    draft.review_summary_json = review_summary(mappings)
     db.add(GPostDraftVersion(gpost_draft_id=draft.id, version=1, snapshot_json=snapshot_draft(draft, mappings), change_summary_json={"created": True}))
     audit(db, "gpost_draft_created", draft, version=1)
     if payload.selected_document_ids:
@@ -132,6 +136,7 @@ def create_version(draft_id: int, db: Session = Depends(get_db)):
         controller_family=old.controller_family, machine_type=old.machine_type,
         selected_document_ids_json=list(old.selected_document_ids_json), standard_profile_id=old.standard_profile_id,
         reference_program_ids_json=list(old.reference_program_ids_json), capability_snapshot_json=dict(old.capability_snapshot_json),
+        manual_configuration_acknowledged=old.manual_configuration_acknowledged,
         machine_profile_snapshot_json=dict(old.machine_profile_snapshot_json), templates_json=dict(old.templates_json),
         unsupported_features_json=list(old.unsupported_features_json), warnings_json=list(old.warnings_json),
         review_summary_json=dict(old.review_summary_json),
@@ -140,7 +145,8 @@ def create_version(draft_id: int, db: Session = Depends(get_db)):
     originals = list(db.scalars(select(GPostMapping).options(selectinload(GPostMapping.evidence)).where(GPostMapping.gpost_draft_id == old.id)))
     for item in originals:
         clone = GPostMapping(gpost_draft_id=new.id, **{key: getattr(item, key) for key in (
-            "mapping_key", "cl_command", "mapping_type", "output_template", "conditions_json", "required_state_json",
+            "mapping_key", "cl_command", "mapping_type", "output_template", "template_key", "template_override",
+            "uses_override", "support_status", "required_for_v1", "description", "conditions_json", "required_state_json",
             "resulting_state_json", "machine_type_scope", "dialect_scope", "supported", "confidence", "source_type",
             "source_document_id", "source_chunk_id", "source_page", "source_section", "source_excerpt", "source_authority",
             "review_status", "review_note")})
@@ -195,15 +201,40 @@ def update_mapping(mapping_id: int, payload: GPostMappingUpdate, db: Session = D
     if draft.status in {"superseded", "archived"}:
         raise HTTPException(409, "Historical or archived mappings cannot be overwritten")
     changes = payload.model_dump(exclude_unset=True)
+    if changes.get("support_status") == "not_applicable" and mapping.required_for_v1 and not changes.get("review_note"):
+        raise HTTPException(422, "Required V1 behavior needs an explicit capability reason before it can be marked not applicable")
+    if "output_template" in changes and "template_override" not in changes:
+        changes["template_override"] = changes.pop("output_template")
+        changes["uses_override"] = True
     document_id = changes.get("source_document_id", mapping.source_document_id)
     chunk_id = changes.get("source_chunk_id", mapping.source_chunk_id)
     validate_mapping_source(db, draft, document_id, chunk_id)
     old_status = mapping.review_status
     for key, value in changes.items(): setattr(mapping, key, value)
-    if mapping.mapping_type == "unsupported": mapping.supported = False
+    mapping.supported = mapping.support_status == "supported"
+    if mapping.uses_override and mapping.template_override is None:
+        raise HTTPException(422, "A mapping override requires template_override text")
+    all_mappings = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == draft.id)))
+    draft.review_summary_json = review_summary(all_mappings)
     event = {"accepted": "gpost_mapping_accepted", "accepted_with_edit": "gpost_mapping_edited", "rejected": "gpost_mapping_rejected"}.get(mapping.review_status, "gpost_mapping_edited")
     audit(db, event, draft, mapping_id=mapping.id, previous_review_status=old_status, review_status=mapping.review_status)
     db.commit(); return mapping_or_404(mapping.id, db)
+
+
+@router.post("/gpost-mappings/{mapping_id}/reset-override", response_model=GPostMappingRead)
+def reset_mapping_override(mapping_id: int, db: Session = Depends(get_db)):
+    mapping = mapping_or_404(mapping_id, db); draft = draft_or_404(mapping.gpost_draft_id, db)
+    if draft.status in {"superseded", "archived"}:
+        raise HTTPException(409, "Historical or archived mappings cannot be overwritten")
+    mapping.template_override = None
+    mapping.uses_override = False
+    if mapping.review_status == "accepted_with_edit":
+        mapping.review_status = "pending"
+    mappings = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == draft.id)))
+    draft.review_summary_json = review_summary(mappings)
+    audit(db, "gpost_mapping_override_reset", draft, mapping_id=mapping.id)
+    db.commit()
+    return mapping_or_404(mapping.id, db)
 
 
 @router.post("/gpost-mappings/{mapping_id}/evidence", response_model=GPostEvidenceRead, status_code=status.HTTP_201_CREATED)

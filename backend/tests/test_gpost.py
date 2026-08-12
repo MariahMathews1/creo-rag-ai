@@ -2,6 +2,7 @@ from sqlalchemy import select
 
 from app.api.profile_extraction import ensure_initial_revision
 from app.models.entities import AuditEvent, DocumentChunk, DocumentType, MachineProfile, MachineType, SourceDocument
+from app.models.profile_extraction import MachineProfileRevision
 
 
 def create_draft(client, db_session, machine_profile, **overrides):
@@ -26,10 +27,14 @@ def test_create_machine_scoped_draft_with_initial_mapping_coverage(client, db_se
     assert draft["machine_profile_revision_id"]
     assert draft["safety_notice"] == "R&D ONLY · NON-PRODUCTION · NOT VALIDATED FOR MACHINE USE"
     mappings = client.get(f"/api/gpost-drafts/{draft['id']}/mappings").json()
-    by_command = {item["cl_command"]: item for item in mappings}
-    assert {"LOADTL", "SPINDL", "FEDRAT", "COOLNT", "RAPID", "GOTO", "FROM", "FINI", "PPRINT"} <= by_command.keys()
-    assert by_command["MULTAX"]["mapping_type"] == "unsupported"
-    assert by_command["TLAXIS"]["supported"] is False
+    by_key = {item["mapping_key"]: item for item in mappings}
+    assert {"loadtl", "spindl_cw", "spindl_ccw", "spindl_off", "fedrat", "coolnt_on", "coolnt_off", "rapid", "goto", "fini"} <= by_key.keys()
+    assert by_key["spindl_cw"]["template_key"] == "spindle_start_cw"
+    assert by_key["spindl_cw"]["output_template"] is None
+    assert by_key["spindl_cw"]["effective_output_template"] == "S{rpm:g} M03"
+    assert by_key["loadtl"]["required_for_v1"] is True
+    assert by_key["multax"]["support_status"] in {"not_applicable", "not_implemented"}
+    assert draft["review_summary_json"]["required"] == 10
 
 
 def test_revision_and_document_ownership_are_enforced(client, db_session, machine_profile):
@@ -52,7 +57,7 @@ def test_mapping_review_and_machine_scoped_document_evidence(client, db_session,
     draft = create_draft(client, db_session, machine_profile, selected_document_ids=[document.id]).json()
     mapping = next(item for item in client.get(f"/api/gpost-drafts/{draft['id']}/mappings").json() if item["cl_command"] == "LOADTL")
     response = client.put(f"/api/gpost-mappings/{mapping['id']}", json={
-        "output_template": "T{tool} M06", "review_status": "accepted_with_edit",
+        "template_override": "T{tool} M06", "uses_override": True, "review_status": "accepted_with_edit",
         "review_note": "Verified against selected manual.", "source_type": "document",
         "source_document_id": document.id, "source_chunk_id": chunk.id,
         "source_page": 42, "source_section": "Tool change", "source_excerpt": "M06 changes the selected tool.",
@@ -60,6 +65,7 @@ def test_mapping_review_and_machine_scoped_document_evidence(client, db_session,
     })
     assert response.status_code == 200
     assert response.json()["review_status"] == "accepted_with_edit"
+    assert response.json()["effective_output_template"] == "T{tool} M06"
     evidence = client.post(f"/api/gpost-mappings/{mapping['id']}/evidence", json={
         "source_type": "document", "document_id": document.id,
         "document_chunk_id": chunk.id, "page": 42, "section": "Tool change",
@@ -108,7 +114,7 @@ def test_multiaxis_and_family_mismatch_block_preview_without_disappearing(client
     lathe_family = create_draft(client, db_session, machine_profile, name="Mismatch", controller_family="fanuc_lathe").json()
     blocked = client.post(f"/api/gpost-drafts/{lathe_family['id']}/preview", json={"cl_source": "FINI"}).json()
     assert blocked["status"] == "blocked"
-    assert any(item["category"] == "Blocking Configuration Issue" for item in blocked["warnings_json"])
+    assert any(item["code"] == "GPOST_TEMPLATE_FAMILY_MISMATCH" for item in blocked["warnings_json"])
 
 
 def test_versioning_compare_exports_and_audit_events(client, db_session, machine_profile):
@@ -116,8 +122,8 @@ def test_versioning_compare_exports_and_audit_events(client, db_session, machine
     second = client.post(f"/api/gpost-drafts/{first['id']}/versions").json()
     assert second["version"] == 2
     assert client.get(f"/api/gpost-drafts/{first['id']}").json()["status"] == "superseded"
-    mapping = next(item for item in client.get(f"/api/gpost-drafts/{second['id']}/mappings").json() if item["cl_command"] == "FEDRAT")
-    client.put(f"/api/gpost-mappings/{mapping['id']}", json={"output_template": "F{feed:g} (EDITED)", "review_status": "accepted_with_edit"})
+    mapping = next(item for item in client.get(f"/api/gpost-drafts/{second['id']}/mappings").json() if item["mapping_key"] == "fedrat")
+    client.put(f"/api/gpost-mappings/{mapping['id']}", json={"template_override": "F{feed:g} (EDITED)", "uses_override": True, "review_status": "accepted_with_edit"})
     diff = client.get(f"/api/gpost-drafts/{first['id']}/compare/{second['id']}").json()
     assert "fedrat" in diff["templates_changed"]
     json_export = client.get(f"/api/gpost-drafts/{second['id']}/export?format=json")
@@ -126,6 +132,69 @@ def test_versioning_compare_exports_and_audit_events(client, db_session, machine
     assert "NON-PRODUCTION" in markdown_export.text
     event_types = set(db_session.scalars(select(AuditEvent.event_type).where(AuditEvent.event_type.like("gpost_%"))))
     assert {"gpost_draft_created", "gpost_version_created", "gpost_exported"} <= event_types
+
+
+def test_shared_template_changes_flow_to_mapping_and_override_can_reset(client, db_session, machine_profile):
+    draft = create_draft(client, db_session, machine_profile).json()
+    mapping = next(item for item in client.get(f"/api/gpost-drafts/{draft['id']}/mappings").json() if item["mapping_key"] == "spindl_cw")
+    templates = dict(draft["templates_json"]); templates["spindle_start_cw"] = "S{rpm:g} M13"
+    assert client.put(f"/api/gpost-drafts/{draft['id']}", json={"templates_json": templates}).status_code == 200
+    updated = next(item for item in client.get(f"/api/gpost-drafts/{draft['id']}/mappings").json() if item["id"] == mapping["id"])
+    assert updated["effective_output_template"] == "S{rpm:g} M13"
+    override = client.put(f"/api/gpost-mappings/{mapping['id']}", json={"template_override": "S{rpm:g} M03 (LOCAL)", "uses_override": True, "review_status": "accepted_with_edit"}).json()
+    assert override["effective_output_template"].endswith("(LOCAL)")
+    reset = client.post(f"/api/gpost-mappings/{mapping['id']}/reset-override").json()
+    assert reset["uses_override"] is False
+    assert reset["effective_output_template"] == "S{rpm:g} M13"
+
+
+def test_support_and_review_states_are_separate_and_progress_uses_required_only(client, db_session, machine_profile):
+    draft = create_draft(client, db_session, machine_profile).json()
+    mappings = client.get(f"/api/gpost-drafts/{draft['id']}/mappings").json()
+    multax = next(item for item in mappings if item["mapping_key"] == "multax")
+    assert multax["support_status"] in {"not_applicable", "not_implemented"}
+    assert multax["review_status"] in {"pending", "deferred"}
+    loadtl = next(item for item in mappings if item["mapping_key"] == "loadtl")
+    client.put(f"/api/gpost-mappings/{loadtl['id']}", json={"review_status": "accepted"})
+    refreshed = client.get(f"/api/gpost-drafts/{draft['id']}").json()["review_summary_json"]
+    assert refreshed["required"] == 10
+    assert refreshed["reviewed"] == 1
+    assert refreshed["needs_review"] == 9
+
+
+def test_profile_machine_type_snapshot_mismatch_and_missing_source_block_preflight(client, db_session, machine_profile):
+    draft = create_draft(client, db_session, machine_profile).json()
+    row = db_session.get(__import__("app.models.gpost", fromlist=["GPostDraft"]).GPostDraft, draft["id"])
+    row.machine_type = "lathe"
+    revision = db_session.get(MachineProfileRevision, row.machine_profile_revision_id)
+    revision.controller_name = "Haas NGC"
+    revision.controller_manufacturer = "Haas"
+    db_session.commit()
+    preview = client.post(f"/api/gpost-drafts/{draft['id']}/preview", json={"cl_source": "FINI"}).json()
+    codes = {item.get("code") for item in preview["warnings_json"]}
+    assert "GPOST_MACHINE_TYPE_SNAPSHOT_MISMATCH" in codes
+    assert "GPOST_CONTROLLER_FAMILY_MISMATCH" in codes
+    assert "GPOST_SOURCE_ACKNOWLEDGEMENT_REQUIRED" in codes
+
+
+def test_draft_creation_requires_approved_profile_revision(client, db_session, machine_profile):
+    revision = ensure_initial_revision(machine_profile, db_session)
+    revision.status = "under_review"
+    db_session.commit()
+    response = client.post(f"/api/machines/{machine_profile.id}/gpost-drafts", json={
+        "machine_profile_revision_id": revision.id, "name": "Unapproved revision",
+        "controller_family": "fanuc_mill", "selected_document_ids": [], "reference_program_ids": [],
+    })
+    assert response.status_code == 422
+    assert "approved machine profile revision" in response.json()["detail"]
+
+
+def test_optional_evidence_and_monotonic_versions(client, db_session, machine_profile):
+    first = create_draft(client, db_session, machine_profile, manual_configuration_acknowledged=True).json()
+    assert first["reference_program_ids_json"] == [] and first["standard_profile_id"] is None
+    second = client.post(f"/api/gpost-drafts/{first['id']}/versions").json()
+    third = client.post(f"/api/gpost-drafts/{second['id']}/versions").json()
+    assert [first["version"], second["version"], third["version"]] == [1, 2, 3]
 
 
 def test_kent_style_lathe_scenario_uses_lathe_defaults_and_blocks_multiaxis(client, db_session):
@@ -154,11 +223,13 @@ def test_kent_style_lathe_scenario_uses_lathe_defaults_and_blocks_multiaxis(clie
     assert draft["templates_json"]["plane_selection"] == "G18"
     assert "M06" not in draft["templates_json"]["tool_change"]
     normal = client.post(f"/api/gpost-drafts/{draft['id']}/preview", json={
-        "cl_source": "LOADTL/101\nSPINDL/RPM,1200,CLW\nFEDRAT/IPR,.01\nCOOLNT/ON\nRAPID\nGOTO/2,99,-1\nFINI",
+        "cl_source": "LOADTL/101\nSPINDL/RPM,1200,CLW\nFEDRAT/IPR,.01\nCOOLNT/ON\nRAPID\nGOTO/2,99,-1\nGOTO/1,.25\nFINI",
     }).json()
     assert "T0101" in normal["generated_gcode"]
     assert "G18" in normal["generated_gcode"]
     assert "Y99" not in normal["generated_gcode"]
+    assert "X2 Z-1" in normal["generated_gcode"]
+    assert "X1 Z0.25 F0.01" in normal["generated_gcode"]
     multiaxis = client.post(f"/api/gpost-drafts/{draft['id']}/preview", json={
         "cl_source": "MULTAX/ON\nFINI",
     }).json()

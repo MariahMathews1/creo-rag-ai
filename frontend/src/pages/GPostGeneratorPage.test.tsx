@@ -69,7 +69,7 @@ const draft = {
   created_from_draft_id: null, name: "KLS-1840N FANUC Post", version: 3,
   status: "review_required", controller_family: "fanuc_lathe", machine_type: "lathe",
   selected_document_ids_json: [3], standard_profile_id: null,
-  reference_program_ids_json: [7], capability_snapshot_json: {
+  reference_program_ids_json: [7], manual_configuration_acknowledged: false, capability_snapshot_json: {
     axis_count: 2, configured_axes: ["X", "Z"], spindle_limits: { max: 3000 },
     feed_limit: 200, work_offsets: ["G54"], restricted_commands: [],
   }, machine_profile_snapshot_json: {}, templates_json: {
@@ -110,7 +110,15 @@ const mappings = [{
   source_type: "capability_registry", source_document_id: null, source_chunk_id: null,
   source_page: null, source_section: null, source_excerpt: null, source_authority: null,
   review_status: "deferred", review_note: "2-axis machine", evidence: [], created_at: "", updated_at: "",
-}];
+}].map((item) => ({
+  template_key: item.mapping_key === "loadtl" ? "tool_change" : item.mapping_key === "spindl" ? "spindle_start_cw" : null,
+  template_override: null, uses_override: false,
+  effective_output_template: item.output_template,
+  support_status: item.supported ? "supported" as const : item.cl_command === "MULTAX" ? "not_applicable" as const : "not_implemented" as const,
+  required_for_v1: item.supported && ["LOADTL", "SPINDL"].includes(item.cl_command),
+  description: item.cl_command === "LOADTL" ? "Tool selection / load" : item.cl_command === "SPINDL" ? "Clockwise spindle start" : "Multiaxis mode",
+  ...item,
+}));
 const preview = {
   id: 9, gpost_draft_id: 4, status: "blocked", generated_gcode: "G20\nG18 G40 G80 G99\nT0101\nS1200 M03\nM30",
   parser_diagnostics_json: [], deterministic_findings_json: [{ title: "Command review", description: "G99 requires review", category: "commands", rule_id: "UNAPPROVED_COMMAND", severity: "warning" }],
@@ -191,7 +199,8 @@ test("workspace overview, sources, and configuration progressively disclose cont
   expect(screen.getByText("G-POST v3")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "overview" })).toHaveAttribute("aria-current", "page");
   expect(screen.getAllByLabelText("Status: Under Review").length).toBeGreaterThan(0);
-  expect(screen.getByText("Machine Configuration")).toBeInTheDocument();
+  expect(screen.getByText("Approved machine profile revision")).toBeInTheDocument();
+  expect(screen.getAllByLabelText("Status: Inherited").length).toBeGreaterThan(0);
   await user.click(screen.getByRole("button", { name: "sources" }));
   expect(screen.getByText("FANUC 0i-Mate TF Programming Manual")).toBeInTheDocument();
   expect(screen.getByText("342 pages")).toBeInTheDocument();
@@ -199,8 +208,10 @@ test("workspace overview, sources, and configuration progressively disclose cont
   expect(screen.getByRole("columnheader", { name: "Actions" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Exclude" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "configuration" }));
+  expect(screen.getByRole("heading", { name: "Shared Output Templates" })).toBeInTheDocument();
   expect(screen.getByText("Program Structure")).toBeInTheDocument();
   expect(screen.getByText("Motion")).toBeInTheDocument();
+  expect(screen.getAllByText(/Used by:/).length).toBeGreaterThan(0);
   expect(screen.queryByText(/\{"/)).not.toBeInTheDocument();
 });
 
@@ -209,6 +220,8 @@ test("mapping filters, acceptance, auto-advance, and source drawer preserve URL 
   render(<MemoryRouter initialEntries={["/gpost/4?tab=mappings&queue=needs-review&mapping=loadtl"]}><Routes><Route path="/gpost/:draftId" element={<><GPostWorkspacePage /><LocationProbe /></>} /></Routes></MemoryRouter>);
   expect(await screen.findByText("Selected Mapping")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "LOADTL" })).toBeInTheDocument();
+  expect(screen.getAllByText("Tool selection / load").length).toBeGreaterThan(0);
+  expect(screen.getByText(/Configuration → Tooling → tool change/)).toBeInTheDocument();
   await user.click(screen.getByText("FANUC 0i-Mate TF Programming Manual"));
   expect(await screen.findByRole("dialog", { name: "G-POST mapping source" })).toBeInTheDocument();
   expect(screen.getByText("T codes select a turret station.", { selector: "p" })).toBeInTheDocument();
@@ -230,6 +243,8 @@ test("Test tab generates a line-numbered preview, CL trace, validation, warnings
   const user = userEvent.setup();
   render(<MemoryRouter initialEntries={["/gpost/4?tab=test"]}><Routes><Route path="/gpost/:draftId" element={<GPostWorkspacePage />} /></Routes></MemoryRouter>);
   expect(await screen.findByRole("heading", { level: 2, name: "Test G-POST Draft" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Preflight" })).toBeInTheDocument();
+  expect(screen.getByText("Fanuc Lathe")).toBeInTheDocument();
   expect(screen.getByLabelText("Upload CL File")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Generate Preview" }));
   expect(await screen.findByLabelText("Generated Code")).toBeInTheDocument();
@@ -248,7 +263,7 @@ test("Test tab generates a line-numbered preview, CL trace, validation, warnings
 
 test("version workspace exposes history and technical comparison", async () => {
   const user = userEvent.setup();
-  const older = { ...draft, id: 10, version: 2, status: "superseded" };
+  const older = { ...draft, id: 10, version: 2, status: "superseded", created_from_draft_id: 4 };
   vi.mocked(api.listGPostDrafts).mockResolvedValue([draft, older] as never);
   vi.mocked(api.compareGPostVersions).mockResolvedValue({ left_draft_id: 4, right_draft_id: 10, mappings_added: [], mappings_removed: [], templates_changed: ["loadtl"], conditions_changed: [], evidence_changed: [], warnings_added: [], warnings_resolved: [] } as never);
   render(<MemoryRouter initialEntries={["/gpost/4?tab=versions"]}><Routes><Route path="/gpost/:draftId" element={<GPostWorkspacePage />} /></Routes></MemoryRouter>);
