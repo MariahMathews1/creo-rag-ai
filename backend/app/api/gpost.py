@@ -14,6 +14,8 @@ from app.models.entities import DocumentChunk, MachineProfile, SourceDocument, u
 from app.models.gpost import GPostDraft, GPostDraftVersion, GPostMapping, GPostMappingEvidence, GPostPreviewRun
 from app.models.profile_extraction import MachineProfileRevision
 from app.models.program_standards import ReferenceProgram, StandardConvention
+from app.models.translation import TranslationAlignment, TranslationAlignmentLink, TranslationExample
+from app.translation.service import normalize_cl_pattern, normalize_gcode_pattern
 from app.schemas.gpost import (
     GPostDraftCreate, GPostDraftRead, GPostDraftUpdate, GPostEvidenceCreate, GPostEvidenceRead, GPostMappingCreate,
     GPostMappingRead, GPostMappingUpdate, PreviewRead, PreviewRequest,
@@ -35,6 +37,32 @@ def mapping_or_404(mapping_id: int, db: Session) -> GPostMapping:
     if mapping is None:
         raise HTTPException(404, "G-POST mapping not found")
     return mapping
+
+
+@router.get("/gpost-mappings/{mapping_id}/historical-translation-evidence")
+def historical_translation_evidence(mapping_id: int, db: Session = Depends(get_db)):
+    mapping = mapping_or_404(mapping_id, db)
+    draft = draft_or_404(mapping.gpost_draft_id, db)
+    examples = list(db.scalars(select(TranslationExample).options(
+        selectinload(TranslationExample.alignments).selectinload(TranslationAlignment.links)
+    ).where(TranslationExample.machine_profile_id == draft.machine_profile_id,
+            TranslationExample.verification_status == "verified_successful")).unique())
+    rows = []
+    for example in examples:
+        for alignment in example.alignments:
+            for link in alignment.links:
+                if link.review_status not in {"confirmed", "edited"} or link.cl_record_start is None or link.gcode_block_start is None:
+                    continue
+                cl = example.parsed_cl_records_json[link.cl_record_start]
+                if cl.get("command") != mapping.cl_command: continue
+                gc = example.parsed_gcode_blocks_json[link.gcode_block_start]
+                rows.append({"translation_example_id": example.id, "name": example.name,
+                    "post_revision": example.post_processor_revision, "operation": example.operation_type,
+                    "cl_pattern": normalize_cl_pattern(cl["text"]),
+                    "gcode_pattern": normalize_gcode_pattern(gc["text"], cl["command"])})
+    return {"mapping_id": mapping.id, "machine_profile_id": draft.machine_profile_id,
+            "cl_command": mapping.cl_command, "verified_example_count": len({row["translation_example_id"] for row in rows}),
+            "observations": rows, "read_only": True, "mapping_changed": False}
 
 
 def ownership_error(callable_):

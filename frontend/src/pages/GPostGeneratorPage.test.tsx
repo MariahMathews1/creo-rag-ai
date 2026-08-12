@@ -13,6 +13,9 @@ vi.mock("../api/client", () => ({ api: {
   listGPostMappings: vi.fn(), createGPostDraft: vi.fn(), getGPostDraft: vi.fn(),
   updateGPostDraft: vi.fn(), updateGPostMapping: vi.fn(), previewGPost: vi.fn(),
   createGPostVersion: vi.fn(), compareGPostVersions: vi.fn(), archiveGPostDraft: vi.fn(),
+  getGPostHistoricalTranslationEvidence: vi.fn(),
+  getGPostPreviewToolpath: vi.fn(),
+  getTranslationAIProviderStatus: vi.fn(), retrieveTranslationExamples: vi.fn(), explainTranslation: vi.fn(),
   getDocumentContent: vi.fn(), gpostExportUrl: vi.fn((id, format) => `/export-${id}.${format}`),
 } }));
 
@@ -149,6 +152,9 @@ beforeEach(() => {
   vi.mocked(api.previewGPost).mockResolvedValue(preview as never);
   vi.mocked(api.getDocumentContent).mockResolvedValue({ document, pages: [{ page_number: 84, text: "T codes select a turret station.", character_count: 32 }], extracted_text: "T codes select a turret station.", chunks: [] } as never);
   vi.mocked(api.createGPostDraft).mockResolvedValue(draft as never);
+  vi.mocked(api.getGPostHistoricalTranslationEvidence).mockResolvedValue({ mapping_id: 5, machine_profile_id: 1, cl_command: "LOADTL", verified_example_count: 2, observations: [], read_only: true, mapping_changed: false } as never);
+  vi.mocked(api.getGPostPreviewToolpath).mockResolvedValue({ source: "both", machine_type: "lathe", default_view: "XZ", coordinate_context: "work", bounds: { min_x: 0, max_x: 1, min_y: 0, max_y: 0, min_z: 0, max_z: 1 }, summary: { segments: 1, rapid: 0, feed: 1, arcs: 0, tools: 1, operations: 0, unresolved_geometry: 0, visualization_simplified: false }, warnings: [], comparison_summary: null, advisory_only: true, safety_notice: "TOOLPATH VISUALIZATION ONLY", segments: [{ id: "gcode-1", source_type: "gcode", source_record_id: 1, source_line_start: 3, source_line_end: 3, operation_id: null, tool_number: 1, motion_type: "linear", start_point: { x: 0, y: 0, z: 0 }, end_point: { x: 1, y: 0, z: 1 }, center_point: null, radius: null, path_points: [], plane: "G18", feed_rate: null, spindle_speed: 1200, rapid: false, arc_direction: null, helical: false, tool_axis: null, alignment_link_id: null, aligned_segment_ids: [], finding_ids: [], sequence_index: 0, visualizable: true, unmatched: false, geometry_status: null, metadata_json: {} }] } as never);
+  vi.mocked(api.getTranslationAIProviderStatus).mockResolvedValue({ provider: "mock", configured: true, reachable: true, authentication_mode: "none", deployment: "fixture", model: "mock", external_processing: false, public_web: false, data_source: "Verified Internal Translation Examples Only", mode: "R&D", error_code: null });
 });
 
 test("primary navigation uses the G-POST Generator identity", () => {
@@ -221,6 +227,11 @@ test("mapping filters, acceptance, auto-advance, and source drawer preserve URL 
   expect(await screen.findByText("Selected Mapping")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "LOADTL" })).toBeInTheDocument();
   expect(screen.getAllByText("Tool selection / load").length).toBeGreaterThan(0);
+  expect(await screen.findByRole("heading", { name: "Historical Translation Evidence" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "AI-Assisted Interpretation" })).toBeInTheDocument();
+  expect(api.explainTranslation).not.toHaveBeenCalled();
+  expect(screen.getByText("2 verified examples")).toBeInTheDocument();
+  expect(screen.getByText("Evidence does not automatically change this mapping.")).toBeInTheDocument();
   expect(screen.getByText(/Configuration → Tooling → tool change/)).toBeInTheDocument();
   await user.click(screen.getByText("FANUC 0i-Mate TF Programming Manual"));
   expect(await screen.findByRole("dialog", { name: "G-POST mapping source" })).toBeInTheDocument();
@@ -259,6 +270,9 @@ test("Test tab generates a line-numbered preview, CL trace, validation, warnings
   expect(screen.getByText("2-axis machine")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "reference diff" }));
   expect(screen.getByText("Approved KLS turning example")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "toolpath" }));
+  expect(await screen.findByText("TOOLPATH VISUALIZATION ONLY")).toBeInTheDocument();
+  expect(api.getGPostPreviewToolpath).toHaveBeenCalledWith(9);
 });
 
 test("version workspace exposes history and technical comparison", async () => {

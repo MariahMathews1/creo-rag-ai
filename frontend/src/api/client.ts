@@ -15,6 +15,13 @@ import type {
   ReferenceProgram, StandardConvention, StandardExtractionRun, StandardProfile,
   ProgramComparison, SimilarProgram, SideBySideComparison, ComparisonFinding,
   GPostDraft, GPostMapping, GPostPreview, GPostVersionDiff,
+  TranslationExample, TranslationAlignment, TranslationAlignmentLink,
+  TranslationDatasetSummary, TranslationExplorerGroup,
+  GPostHistoricalTranslationEvidence,
+  TranslationPreview, TranslationAuditEvent,
+  ToolpathResponse,
+  TranslationAIProviderStatus, TranslationRetrievalRequest, TranslationRetrievalResponse,
+  TranslationExplanationResponse, TranslationAIInvocation,
 } from "../types";
 
 const API_BASE_URL =
@@ -54,6 +61,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getTranslationAIProviderStatus: (checkReachability = false) => request<TranslationAIProviderStatus>(`/ai/translation/provider-status${checkReachability ? "?check_reachability=true" : ""}`),
+  retrieveTranslationExamples: (payload: TranslationRetrievalRequest) => request<TranslationRetrievalResponse>("/ai/translation/retrieve", { method: "POST", body: JSON.stringify(payload) }),
+  explainTranslation: (retrieval: TranslationRetrievalRequest, exampleIds: number[]) => request<TranslationExplanationResponse>("/ai/translation/explain", { method: "POST", body: JSON.stringify({ retrieval, example_ids: exampleIds }) }),
+  listTranslationAIInvocations: (machineId?: number) => request<TranslationAIInvocation[]>(`/ai/translation/invocations${machineId ? `?machine_profile_id=${machineId}` : ""}`),
+  setTranslationAIConsent: (exampleId: number, allowed: boolean, reviewerLabel: string, acknowledgement: boolean) => request<TranslationExample>(`/translations/${exampleId}/ai-processing-consent`, { method: "POST", body: JSON.stringify({ allowed, reviewer_label: reviewerLabel, acknowledgement }) }),
   listProfiles: () => request<MachineProfile[]>("/machines"),
   createProfile: (profile: MachineProfileInput) =>
     request<MachineProfile>("/machines", {
@@ -415,4 +427,31 @@ export const api = {
   ),
   gpostExportUrl: (draftId: number, format: "json" | "markdown") =>
     `${API_BASE_URL}/gpost-drafts/${draftId}/export?format=${format}`,
+  listTranslations: (params = new URLSearchParams()) =>
+    request<TranslationExample[]>(`/translations${params.size ? `?${params}` : ""}`),
+  getTranslation: (id: number) => request<TranslationExample>(`/translations/${id}`),
+  getTranslationSummary: () => request<TranslationDatasetSummary>("/translations/summary"),
+  getTranslationExplorer: (params = new URLSearchParams()) =>
+    request<TranslationExplorerGroup[]>(`/translations/explorer${params.size ? `?${params}` : ""}`),
+  createTranslation: (payload: Record<string, unknown>) => request<TranslationExample>("/translations", {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  previewTranslation: (payload: { machine_profile_id: number; machine_profile_revision_id: number; cl_source_text: string; gcode_source_text: string }) => request<TranslationPreview>("/translations/preview", { method: "POST", body: JSON.stringify(payload) }),
+  getTranslationHistory: (id: number) => request<TranslationAuditEvent[]>(`/translations/${id}/history`),
+  getAnalysisToolpath: (id: number, source = "both") => request<ToolpathResponse>(`/analyses/${id}/toolpath?source=${source}`),
+  getTranslationToolpath: (id: number, source = "both") => request<ToolpathResponse>(`/translations/${id}/toolpath?source=${source}`),
+  getGPostPreviewToolpath: (id: number, source = "both") => request<ToolpathResponse>(`/gpost-preview-runs/${id}/toolpath?source=${source}`),
+  getGPostHistoricalTranslationEvidence: (mappingId: number) => request<GPostHistoricalTranslationEvidence>(`/gpost-mappings/${mappingId}/historical-translation-evidence`),
+  importTranslation: (metadata: Record<string, unknown>, clFile: File, gcodeFile: File) => {
+    const form = new FormData(); form.append("metadata_json", JSON.stringify(metadata));
+    form.append("cl_file", clFile); form.append("gcode_file", gcodeFile);
+    return request<TranslationExample>("/translations/import", { method: "POST", body: form });
+  },
+  createTranslationAlignment: (id: number) => request<TranslationAlignment>(`/translations/${id}/alignment`, { method: "POST" }),
+  confirmTranslationLink: (id: number) => request<TranslationAlignmentLink>(`/translation-alignment-links/${id}/confirm`, { method: "POST" }),
+  rejectTranslationLink: (id: number) => request<TranslationAlignmentLink>(`/translation-alignment-links/${id}/reject`, { method: "POST" }),
+  updateTranslationLink: (id: number, payload: Record<string, unknown>) => request<TranslationAlignmentLink>(`/translation-alignment-links/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  createManualTranslationLink: (alignmentId: number, payload: Record<string, unknown>) => request<TranslationAlignmentLink>(`/translation-alignments/${alignmentId}/links`, { method: "POST", body: JSON.stringify(payload) }),
+  transitionTranslation: (id: number, action: "candidate" | "review" | "verify" | "deprecate" | "invalidate", payload: { note: string; reviewer_label: string; acknowledgement?: boolean }) =>
+    request<TranslationExample>(`/translations/${id}/${action}`, { method: "POST", body: JSON.stringify(payload) }),
 };

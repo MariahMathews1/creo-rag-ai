@@ -54,6 +54,8 @@ class ParsedGCodeBlock:
     g_codes: list[str] = field(default_factory=list)
     m_codes: list[str] = field(default_factory=list)
     coordinates: dict[str, float] = field(default_factory=dict)
+    arc_offsets: dict[str, float] = field(default_factory=dict)
+    arc_radius: float | None = None
     feed_rate: float | None = None
     spindle_speed: float | None = None
     tool_number: int | None = None
@@ -62,6 +64,7 @@ class ParsedGCodeBlock:
     program_number: int | None = None
     work_offset: str | None = None
     modal_state: ModalState = field(default_factory=ModalState)
+    state_before: ModalState = field(default_factory=ModalState)
 
     @property
     def source(self) -> str:
@@ -147,7 +150,7 @@ class GCodeParser:
             original_text=original_text,
             cleaned_text=cleaned_text,
             comments=comments,
-            modal_state=replace(modal),
+            modal_state=replace(modal), state_before=replace(modal),
         )
 
         if not upper or upper == "%":
@@ -166,6 +169,10 @@ class GCodeParser:
                     block.m_codes.append(normalize_code(letter, raw_value))
                 elif letter in {"X", "Y", "Z", "A", "B", "C", "U", "V", "W"}:
                     block.coordinates[letter] = value
+                elif letter in {"I", "J", "K"}:
+                    block.arc_offsets[letter] = value
+                elif letter == "R":
+                    block.arc_radius = value
                 elif letter == "S":
                     block.spindle_speed = value
                 elif letter == "F":
@@ -228,4 +235,3 @@ class GCodeParser:
                 modal.coolant_state = "off"
             elif code == "M06" and modal.selected_tool is not None:
                 modal.active_tool = modal.selected_tool
-

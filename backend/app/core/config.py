@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_chat_model: str = ""
     openai_embedding_model: str = ""
+    translation_ai_provider: str = "mock"
+    azure_openai_endpoint: str = ""
+    azure_openai_deployment: str = ""
+    azure_openai_model: str = ""
+    azure_openai_auth_mode: str = "entra_id"
+    azure_openai_api_key: str = ""
+    translation_ai_timeout_seconds: float = Field(default=20, gt=0, le=120)
+    translation_ai_max_retries: int = Field(default=2, ge=0, le=5)
 
     model_config = SettingsConfigDict(
         env_file=(PROJECT_ROOT / ".env", BACKEND_ROOT / ".env"),

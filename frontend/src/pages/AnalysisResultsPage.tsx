@@ -4,9 +4,11 @@ import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { SafetyBanner } from "../components/SafetyBanner";
 import { SeverityBadge } from "../components/SeverityBadge";
+import { ToolpathViewer } from "../components/toolpath/ToolpathViewer";
 import type {
   AnalysisFinding, AnalysisProject, MachineProfile, ProgramComparison,
   Severity, StandardProfile,
+  ToolpathResponse, ToolpathSegment,
 } from "../types";
 
 const severities: Severity[] = ["blocking", "warning", "informational"];
@@ -26,6 +28,9 @@ export function AnalysisResultsPage() {
   const [comparisons, setComparisons] = useState<ProgramComparison[]>([]);
   const [standardId, setStandardId] = useState(0);
   const [comparisonBusy, setComparisonBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<"review" | "toolpath">("review");
+  const [toolpath, setToolpath] = useState<ToolpathResponse | null>(null);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([api.getProject(id), api.getFindings(id), api.listProfiles()])
@@ -76,6 +81,7 @@ export function AnalysisResultsPage() {
 
   function selectFinding(finding: AnalysisFinding) {
     setSelectedFindingId(finding.id);
+    setSelectedSegmentId(toolpath?.segments.find((segment) => segment.finding_ids.includes(finding.id))?.id ?? null);
     if (finding.line_number) {
       window.requestAnimationFrame(() => {
         document
@@ -84,6 +90,9 @@ export function AnalysisResultsPage() {
       });
     }
   }
+
+  function openToolpath() { setActiveTab("toolpath"); if (!toolpath && typeof api.getAnalysisToolpath === "function") api.getAnalysisToolpath(id).then(setToolpath).catch((cause) => setError(cause.message)); }
+  function selectToolpathSegment(segment: ToolpathSegment) { setSelectedSegmentId(segment.id); const finding = findings.find((item) => segment.finding_ids.includes(item.id)); if (finding) setSelectedFindingId(finding.id); document.getElementById(`line-${segment.source_line_start}`)?.scrollIntoView?.({ block: "center" }); }
 
   async function runStandardComparison() {
     if (!standardId) return;
@@ -111,7 +120,7 @@ export function AnalysisResultsPage() {
   if (!project) return <section className="page"><p className="loading">Loading analysis…</p></section>;
 
   return (
-    <section className="page results-page">
+    <section className={`page results-page ${activeTab === "toolpath" ? "toolpath-active" : ""}`}>
       <PageHeader
         eyebrow={`Analysis #${project.id}`}
         title={project.name}
@@ -119,6 +128,8 @@ export function AnalysisResultsPage() {
         action={<div className="header-actions"><Link className="button secondary" to={`/analyses/${project.id}/traceability`}>Open traceability</Link><Link className="button secondary" to="/analysis/new">New analysis</Link></div>}
       />
       <SafetyBanner />
+      <nav className="translation-tabs" aria-label="Analysis views"><button className={activeTab === "review" ? "active" : ""} onClick={() => setActiveTab("review")}>Review</button><button className={activeTab === "toolpath" ? "active" : ""} onClick={openToolpath}>Toolpath</button></nav>
+      {activeTab === "toolpath" && <section className="analysis-toolpath panel"><header><h2>Visual Toolpath Review</h2><p>Parsed programmed motion with deterministic finding traceability.</p></header>{toolpath ? <ToolpathViewer data={toolpath} selectedSegmentId={selectedSegmentId} selectedFindingId={selectedFindingId} onSegmentSelect={selectToolpathSegment} /> : <p>Loading programmed motion…</p>}</section>}
       <div className="result-metrics">
         <div className="overall-card"><small>Overall review status</small><strong>{statusLabel}</strong><span className={project.status === "blocked" ? "indicator red" : project.status === "review_required" ? "indicator amber" : "indicator green"} /></div>
         {severities.map((severity) => <div className={`metric metric-${severity}`} key={severity}><span>{counts[severity]}</span><div><strong>{severity}</strong><small>findings</small></div></div>)}
@@ -179,7 +190,7 @@ export function AnalysisResultsPage() {
                   : lineFindings.length
                     ? "line-flagged"
                     : "";
-              return <li id={`line-${index + 1}`} className={className} key={index}><code>{line || " "}</code>{lineFindings.length > 0 && <span className="line-count">{lineFindings.length}</span>}</li>;
+              return <li id={`line-${index + 1}`} className={className} key={index} onClick={() => setSelectedSegmentId(toolpath?.segments.find((segment) => segment.source_type === "gcode" && segment.source_line_start === index + 1)?.id ?? null)}><code>{line || " "}</code>{lineFindings.length > 0 && <span className="line-count">{lineFindings.length}</span>}</li>;
             })}
           </ol>
         </section>

@@ -6,6 +6,7 @@ const links = [
   { to: "/documents", label: "Documents", glyph: "▤" },
   { to: "/analysis/new", label: "Analysis", glyph: "+" },
   { to: "/gpost", label: "G-POST Generator", glyph: "⚙" },
+  { to: "/translations", label: "Translation Examples", glyph: "⇄" },
   { to: "/manual-assistant", label: "Manual Assistant", glyph: "?" },
 ];
 

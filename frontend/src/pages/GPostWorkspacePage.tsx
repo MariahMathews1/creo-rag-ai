@@ -5,9 +5,13 @@ import { GPostCodeViewer } from "../components/GPostCodeViewer";
 import { GPostSourceDrawer } from "../components/GPostSourceDrawer";
 import { GPostStatusBadge } from "../components/GPostStatusBadge";
 import { SafetyBanner } from "../components/SafetyBanner";
+import { ToolpathViewer } from "../components/toolpath/ToolpathViewer";
+import { TranslationAIInterpretationPanel } from "../components/TranslationAIInterpretationPanel";
 import type {
   GPostDraft, GPostMapping, GPostPreview, GPostVersionDiff, MachineProfile,
   MachineProfileRevision, ReferenceProgram, SourceDocument, StandardProfile,
+  GPostHistoricalTranslationEvidence,
+  ToolpathResponse,
 } from "../types";
 import {
   controllerFamilyCompatible, draftReviewMetrics, mappingCategory, mappingVisualStatus, MAPPING_CATEGORIES,
@@ -25,7 +29,7 @@ GOTO/0.8,-1.0
 COOLNT/OFF
 SPINDL/OFF
 FINI`;
-const RESULT_TABS = ["generated-code", "cl-trace", "validation", "warnings", "reference-diff"] as const;
+const RESULT_TABS = ["generated-code", "toolpath", "cl-trace", "validation", "warnings", "reference-diff"] as const;
 const TEMPLATE_GROUPS: Array<[string, Array<[string, string]>]> = [
   ["Program Structure", [["program_header", "Program header"], ["safe_start", "Safe start"], ["footer", "Footer"]]],
   ["Tooling", [["tool_selection", "Tool selection"], ["tool_change", "Tool change"]]],
@@ -73,6 +77,8 @@ export function GPostWorkspacePage() {
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [historicalEvidence, setHistoricalEvidence] = useState<GPostHistoricalTranslationEvidence | null>(null);
+  const [previewToolpath, setPreviewToolpath] = useState<ToolpathResponse | null>(null);
 
   function updateParams(updates: Record<string, string | null>, replace = false) {
     const next = new URLSearchParams(params);
@@ -144,6 +150,11 @@ export function GPostWorkspacePage() {
       : selectedMapping.template_key ? templates[selectedMapping.template_key] ?? "" : selectedMapping.output_template ?? "");
     setReviewNote(selectedMapping.review_note ?? "");
   }, [selectedMapping?.id, templates]);
+  useEffect(() => {
+    if (!selectedMapping) { setHistoricalEvidence(null); return; }
+    void api.getGPostHistoricalTranslationEvidence(selectedMapping.id).then(setHistoricalEvidence).catch(() => setHistoricalEvidence(null));
+  }, [selectedMapping?.id]);
+  useEffect(() => { if (preview && resultTab === "toolpath" && typeof api.getGPostPreviewToolpath === "function") void api.getGPostPreviewToolpath(preview.id).then(setPreviewToolpath).catch((cause) => setError(cause.message)); }, [preview?.id, resultTab]);
   const metrics = draft ? draftReviewMetrics(draft, mappings) : { total: 0, required: 0, reviewed: 0, needsReview: 0, percent: 0, notApplicable: 0, notImplemented: 0, blocking: 0, unsupported: 0, warnings: 0 };
   const selectedDocument = documents.find((item) => item.id === selectedMapping?.source_document_id) ?? null;
   const drawerOpen = params.get("source") === "1" && Boolean(selectedMapping);
@@ -268,7 +279,10 @@ export function GPostWorkspacePage() {
 
     {activeTab === "versions" && <section className="gpost-versions-tab"><header><div><h2>Version History</h2><p>Historical versions remain read-only and are never silently overwritten.</p></div><button className="button primary" onClick={() => void createVersion()}>New Version</button></header><div className="gpost-version-layout"><section className="panel"><table><thead><tr><th>Version</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead><tbody>{versions.sort((a, b) => b.version - a.version).map((item) => <tr key={item.id}><td><strong>v{item.version}</strong></td><td><GPostStatusBadge status={item.status} /></td><td>{new Date(item.updated_at).toLocaleString()}</td><td>{item.id === draft.id ? "Current" : <Link to={`/gpost/${item.id}?tab=versions`}>Open</Link>}</td></tr>)}</tbody></table></section><section className="panel"><h2>Compare Versions</h2><div className="gpost-version-controls"><select aria-label="Compare version" value={compareId} onChange={(event) => setCompareId(Number(event.target.value))}><option value={0}>Select historical version</option>{versions.filter((item) => item.id !== draft.id).map((item) => <option key={item.id} value={item.id}>v{item.version} · {item.status}</option>)}</select><button onClick={() => void compareVersions()}>Compare</button></div>{versionDiff ? <dl className="gpost-version-diff">{Object.entries(versionDiff).filter(([key]) => !key.endsWith("draft_id")).map(([key, value]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{Array.isArray(value) && value.length ? value.map(String).join(", ") : "None"}</dd></div>)}</dl> : <p>Select a version to inspect technical changes.</p>}</section></div></section>}
 
+    {activeTab === "test" && resultTab === "toolpath" && preview && <section className="panel gpost-preview-toolpath"><header><h2>Preview Toolpath</h2><p>Input CL and generated G-code programmed-motion overlay.</p></header>{previewToolpath ? <ToolpathViewer data={previewToolpath} /> : <p>Loading programmed motion…</p>}</section>}
     <SafetyBanner title="Non-production configuration" message="R&D ONLY · NON-PRODUCTION · NOT VALIDATED FOR MACHINE USE. Generated output requires qualified review and controlled simulation." />
+    {activeTab === "mappings" && selectedMapping && <section className="panel gpost-historical-evidence"><header><div><h2>Historical Translation Evidence</h2><p>Read-only verified paired examples; separate from manual and organizational-standard evidence.</p></div><strong>{historicalEvidence?.verified_example_count ?? 0} verified examples</strong></header><Link to={`/translations?machine=${draft.machine_profile_id}`}>View Examples →</Link><small>Evidence does not automatically change this mapping.</small></section>}
+    {activeTab === "mappings" && selectedMapping && <TranslationAIInterpretationPanel compact machines={[machine]} initialMachineId={machine.id} initialRevisionId={draft.machine_profile_revision_id} initialCl={`${selectedMapping.cl_command}/`} />}
     {drawerOpen && selectedMapping && <GPostSourceDrawer mapping={selectedMapping} document={selectedDocument} onClose={() => updateParams({ source: null }, true)} />}
   </section>;
 }

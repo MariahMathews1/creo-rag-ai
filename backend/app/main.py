@@ -8,6 +8,9 @@ from app.api.documents import router as documents_router
 from app.api.manual_assistant import router as manual_router
 from app.api.machine_profiles import router as machine_profiles_router
 from app.api.traceability import router as traceability_router
+from app.api.translations import router as translations_router
+from app.api.toolpath import router as toolpath_router
+from app.api.translation_ai import router as translation_ai_router
 from app.api.profile_extraction import router as profile_extraction_router
 from app.api.program_standards import router as program_standards_router
 from app.api.gpost import router as gpost_router
@@ -43,6 +46,9 @@ app.include_router(analysis_router, prefix=settings.api_prefix)
 app.include_router(documents_router, prefix=settings.api_prefix)
 app.include_router(manual_router, prefix=settings.api_prefix)
 app.include_router(traceability_router, prefix=settings.api_prefix)
+app.include_router(translations_router, prefix=settings.api_prefix)
+app.include_router(toolpath_router, prefix=settings.api_prefix)
+app.include_router(translation_ai_router, prefix=settings.api_prefix)
 app.include_router(profile_extraction_router, prefix=settings.api_prefix)
 app.include_router(program_standards_router, prefix=settings.api_prefix)
 app.include_router(gpost_router, prefix=settings.api_prefix)

@@ -403,3 +403,107 @@ export interface GPostVersionDiff {
   mappings_removed: string[]; templates_changed: string[]; conditions_changed: string[];
   evidence_changed: string[]; warnings_added: unknown[]; warnings_resolved: unknown[];
 }
+
+export type TranslationStatus = "unknown" | "candidate" | "reviewed" | "verified_successful" | "deprecated" | "invalid";
+export interface TranslationAlignmentLink {
+  id: number; alignment_id: number; cl_record_start: number | null; cl_record_end: number | null;
+  gcode_block_start: number | null; gcode_block_end: number | null; link_type: string;
+  confidence: number; review_status: string; match_reasons_json: string[];
+  notes: string | null; reviewed_by_label: string | null; created_at: string; updated_at: string;
+}
+export interface TranslationAlignment {
+  id: number; translation_example_id: number; status: string; algorithm_version: string;
+  summary_json: Record<string, number>; created_at: string; updated_at: string;
+  links: TranslationAlignmentLink[];
+}
+export interface TranslationExample {
+  id: number; machine_profile_id: number; machine_profile_revision_id: number; reference_program_id: number | null;
+  name: string; description: string | null; controller_name: string | null; controller_version: string | null;
+  post_processor_name: string | null; post_processor_revision: string | null;
+  operation_type: string; operation_name: string | null; cl_source_text: string; cl_source_hash: string;
+  cl_original_filename: string | null; gcode_source_text: string; gcode_source_hash: string;
+  gcode_original_filename: string | null; verification_status: TranslationStatus;
+  part_identifier: string | null; program_identifier: string | null; project_identifier: string | null;
+  tooling_context_json: Record<string, unknown>; setup_context_json: Record<string, unknown>;
+  machine_context_snapshot_json: Record<string, unknown>; source_system: string | null;
+  source_repository: string | null; work_order_reference: string | null; imported_by_label: string | null;
+  source_provenance: string | null; verification_basis: string | null; verification_note: string | null;
+  cl_parse_summary_json: Record<string, number | boolean>; gcode_parse_summary_json: Record<string, number | boolean>;
+  parsed_cl_records_json: Array<Record<string, unknown>>; parsed_gcode_blocks_json: Array<Record<string, unknown>>;
+  validation_summary_json: { blocking_count?: number; warning_count?: number; informational_count?: number; findings?: Array<Record<string, unknown>> };
+  ai_processing_allowed: boolean; created_at: string; updated_at: string; reviewed_at: string | null;
+  verified_at: string | null; deprecated_at: string | null; alignments: TranslationAlignment[];
+  advisory_only: true; safety_notice: string;
+}
+export interface TranslationDatasetSummary {
+  total: number; candidates: number; reviewed: number; verified: number; deprecated: number; invalid: number;
+  by_machine: Array<Record<string, number | string>>; by_post_revision: Array<Record<string, number | string>>;
+  by_operation: Array<Record<string, number | string>>;
+}
+export interface TranslationExplorerGroup {
+  machine_profile_id: number; machine: string; controller: string | null; post_revision: string | null;
+  operation: string; cl_command: string; cl_pattern: string; gcode_pattern: string; count: number;
+}
+export interface TranslationPreview {
+  cl_source_hash: string; gcode_source_hash: string;
+  cl_parse_summary_json: Record<string, number | boolean>;
+  gcode_parse_summary_json: Record<string, number | boolean>;
+  validation_summary_json: { blocking_count: number; warning_count: number; informational_count: number; findings: Array<Record<string, unknown>> };
+  machine_context_snapshot_json: Record<string, unknown>; revision_warning: string | null; advisory_only: true;
+}
+export interface TranslationAuditEvent {
+  id: number; event_type: string; metadata_json: Record<string, unknown>; created_at: string;
+}
+export interface GPostHistoricalTranslationEvidence {
+  mapping_id: number; machine_profile_id: number; cl_command: string; verified_example_count: number;
+  observations: Array<{ translation_example_id: number; name: string; post_revision: string | null; operation: string; cl_pattern: string; gcode_pattern: string }>;
+  read_only: true; mapping_changed: false;
+}
+export interface ToolpathPoint { x: number | null; y: number | null; z: number | null; a?: number | null; b?: number | null; c?: number | null; }
+export interface ToolpathSegment {
+  id: string; source_type: "cl" | "gcode"; source_record_id: number | null; source_line_start: number; source_line_end: number;
+  operation_id: string | null; tool_number: number | null; motion_type: string; start_point: ToolpathPoint | null; end_point: ToolpathPoint | null;
+  center_point: ToolpathPoint | null; radius: number | null; path_points: ToolpathPoint[]; plane: string | null;
+  feed_rate: number | null; spindle_speed: number | null; rapid: boolean; arc_direction: string | null; helical: boolean;
+  tool_axis: ToolpathPoint | null; alignment_link_id: number | null; aligned_segment_ids: string[]; finding_ids: number[];
+  sequence_index: number; visualizable: boolean; unmatched: boolean; geometry_status: string | null; metadata_json: Record<string, unknown>;
+}
+export interface ToolpathResponse {
+  source: string; machine_type: string; default_view: "XY" | "XZ" | "YZ"; coordinate_context: string;
+  segments: ToolpathSegment[]; bounds: Record<string, number | null>; summary: Record<string, number | boolean>;
+  warnings: Array<{ code: string; message: string; line?: number }>; comparison_summary: Record<string, number>;
+  advisory_only: true; safety_notice: string;
+}
+
+export interface TranslationAIProviderStatus {
+  provider: "disabled" | "mock" | "azure_openai"; configured: boolean; reachable: boolean | null;
+  authentication_mode: string | null; deployment: string | null; model: string | null;
+  external_processing: boolean; public_web: false; data_source: string; mode: "R&D"; error_code: string | null;
+}
+export interface TranslationRetrievalRequest {
+  machine_profile_id: number; machine_profile_revision_id?: number | null; controller_name?: string | null;
+  controller_version?: string | null; post_processor_name?: string | null; post_processor_revision?: string | null;
+  operation_type?: string | null; cl_text: string; max_examples?: number;
+  allow_revision_fallback?: boolean; allow_machine_family_fallback?: boolean;
+}
+export interface RetrievedTranslationExample {
+  example_id: number; name: string; machine_profile_id: number; machine: string; machine_profile_revision_id: number;
+  controller: string | null; post_revision: string | null; operation: string; cl_excerpt: string; gcode_excerpt: string;
+  cl_pattern_match: "strong" | "related" | "none"; alignment_coverage: number; verification_status: string;
+  retrieval_reasons: string[]; ai_processing_allowed: boolean;
+}
+export interface TranslationRetrievalResponse {
+  retrieval_scope: string; examples: RetrievedTranslationExample[]; eligible_count: number;
+  public_web: false; ai_called: false; warnings: string[];
+}
+export interface TranslationExplanationResponse {
+  status: string; input_cl: string; interpreted_operation: string | null; suggested_mapping_pattern: string | null;
+  short_rationale: string; example_ids: number[]; uncertainties: string[]; unsupported_features: string[];
+  warnings: string[]; provider_metadata: Record<string, unknown>; invocation_id: number; advisory_only: true; safety_notice: string;
+}
+export interface TranslationAIInvocation {
+  id: number; provider: string; operation_type: string; machine_profile_id: number; machine_profile_revision_id: number | null;
+  translation_example_ids_json: number[]; input_hash: string; prompt_template_version: string; response_schema_version: string;
+  response_status: string; external_processing: boolean; provider_metadata_json: Record<string, unknown>;
+  token_usage_json: Record<string, number>; duration_ms: number | null; created_at: string;
+}

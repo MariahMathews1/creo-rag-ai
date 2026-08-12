@@ -16,6 +16,8 @@ import { StandardExtractionReviewPage } from "./pages/StandardExtractionReviewPa
 import { ApprovedProgramComparisonPage } from "./pages/ApprovedProgramComparisonPage";
 import { GPostGeneratorPage } from "./pages/GPostGeneratorPage";
 import { GPostWorkspacePage } from "./pages/GPostWorkspacePage";
+import { TranslationExamplesPage } from "./pages/TranslationExamplesPage";
+import { TranslationDetailPage } from "./pages/TranslationDetailPage";
 
 export default function App() {
   return (
@@ -32,6 +34,8 @@ export default function App() {
           <Route path="manual-assistant" element={<ManualAssistantPage />} />
           <Route path="gpost" element={<GPostGeneratorPage />} />
           <Route path="gpost/:draftId" element={<GPostWorkspacePage />} />
+          <Route path="translations" element={<TranslationExamplesPage />} />
+          <Route path="translations/:exampleId" element={<TranslationDetailPage />} />
           <Route path="machines/:machineId/profile-extraction/new" element={<ProfileExtractionSetupPage />} />
           <Route path="machines/:machineId/profile-extraction/:runId" element={<ProfileExtractionReviewPage />} />
           <Route path="machines/:machineId/revisions" element={<ProfileRevisionsPage />} />

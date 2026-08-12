@@ -193,7 +193,7 @@ def parse_gcode(analysis_id: int, db: Session = Depends(get_db)):
             coordinates_json=block.coordinates, feed_rate=block.feed_rate,
             spindle_speed=block.spindle_speed, tool_number=block.tool_number,
             active_tool=block.modal_state.active_tool, work_offset=block.work_offset,
-            motion_mode=block.modal_state.motion_mode, state_before_json=state,
+            motion_mode=block.modal_state.motion_mode, state_before_json=asdict(block.state_before),
             state_after_json=state, parse_errors_json=block.parse_errors,
         ))
     project.gcode_processing_status = "parsed"; project.last_analyzed_at = utc_now()

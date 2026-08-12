@@ -492,3 +492,4 @@
   .gpost-configuration-tab details > div { grid-template-columns: 1fr; }
   .gpost-toast-region { top: 72px; right: 12px; width: calc(100vw - 24px); }
 }
+.gpost-historical-evidence{margin-top:1rem;display:grid;gap:.7rem}.gpost-historical-evidence>header{display:flex;justify-content:space-between;gap:1rem;align-items:start}.gpost-historical-evidence h2{margin:0}.gpost-historical-evidence p{margin:.3rem 0;color:var(--muted)}.gpost-historical-evidence>a{width:max-content;font-weight:750}.gpost-historical-evidence>small{color:var(--muted)}

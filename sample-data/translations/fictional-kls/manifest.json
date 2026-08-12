@@ -1,0 +1,7 @@
+[
+  {"slug":"turning","name":"Fictional OD turning","operation_type":"turning","status":"verified_successful","post_revision":"DEMO-REV-12","notice":"FICTIONAL SAMPLE - NOT FOR MACHINE USE"},
+  {"slug":"facing","name":"Fictional facing pass","operation_type":"facing","status":"verified_successful","post_revision":"DEMO-REV-12","notice":"FICTIONAL SAMPLE - NOT FOR MACHINE USE"},
+  {"slug":"drilling","name":"Fictional center drilling","operation_type":"drilling","status":"verified_successful","post_revision":"DEMO-REV-12","notice":"FICTIONAL SAMPLE - NOT FOR MACHINE USE"},
+  {"slug":"tool-change","name":"Fictional tool-change candidate","operation_type":"setup","status":"candidate","post_revision":"DEMO-REV-13","notice":"FICTIONAL SAMPLE - NOT FOR MACHINE USE"},
+  {"slug":"spindle-coolant","name":"Fictional retired spindle/coolant sequence","operation_type":"test","status":"deprecated","post_revision":"DEMO-REV-09","notice":"FICTIONAL SAMPLE - NOT FOR MACHINE USE"}
+]

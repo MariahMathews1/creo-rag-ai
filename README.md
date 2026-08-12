@@ -28,7 +28,7 @@ used to operate machinery.
 
 ## 1. Project status
 
-This repository contains a working proof of concept through Phase 7:
+This repository contains a working proof of concept through Phase 10:
 
 | Phase | Capability | Current state |
 | --- | --- | --- |
@@ -39,23 +39,35 @@ This repository contains a working proof of concept through Phase 7:
 | 5 | Citation-backed machine-profile extraction and revision governance | Implemented |
 | 5 UX | Guided queues, filters, batch safeguards, evidence drawer, URL state | Implemented |
 | 6 | Approved-program governance, standard extraction, and comparison | Implemented |
-| 7 | Machine-scoped G-POST draft generation, review, preview, and versioning | Implemented |
+| G-POST prototype | Machine-scoped draft generation, review, preview, and versioning | Implemented R&D tool |
+| Phase 7 preparation | Verified CL/G-code translation dataset architecture | Documented; runtime deferred |
+| Phase 8 | Governed paired translation dataset, alignment review, and explorer | Implemented |
+| Phase 9 | Canvas toolpath visualization and visual traceability | Implemented |
+| Phase 10 | Controlled Azure OpenAI provider and internal translation retrieval | Implemented; mock default |
 
 This is not production software. Authentication, authorization, enterprise
 document control, encrypted program storage, formal electronic signatures,
 malware scanning, qualified simulation integration, and full CNC semantics are
 outside the current proof-of-concept boundary.
 
+### Revised R&D Direction — CL/G-Code Translation Learning
+
+The primary research hypothesis is now that site-specific Creo CL/NCL → G-code behavior should be learned and retrieved from **verified historical CL/G-code pairs** for the exact machine and post context. Technical manuals remain important supporting evidence for documented syntax, capability, parameters, and limits, but they do not by themselves describe the organization's actual post output.
+
+Machine-profile revisions remain authoritative exact-machine context. Deterministic parsers and validation rules remain authoritative checks on every future candidate. Manual Assistant remains internal document Q&A, not a model that learns the post processor. The existing G-POST Generator remains an R&D configuration, mapping, and deterministic-preview tool and may later consume historical translation evidence separately from manual evidence.
+
+Azure OpenAI now has a controlled, optional explanation-only provider boundary. The default remains deterministic mock mode; Azure is never contacted unless configured and a user explicitly requests an interpretation or connectivity check. Only verified-successful, exact-machine, explicitly consented TranslationExample excerpts may enter external context. Public-web retrieval, full-program AI G-code generation, automatic G-POST changes, and fine-tuning remain disabled. Production deployment still requires separate organizational security, data-processing, validation, and operational approval.
+
 ### Current automated verification baseline
 
 At the time of this handoff:
 
 ```text
-Backend: 65 tests passing
-Frontend: 39 tests passing
+Backend: 104 tests passing
+Frontend: 52 tests passing
 Frontend TypeScript check: passing
 Frontend production build: passing
-Database migration head: 20260811_01
+Database migration head: 20260814_01
 ```
 
 ---
@@ -90,6 +102,20 @@ The major workflows are:
 24. Review CL mappings and supporting document, standard, and reference evidence.
 25. Generate advisory G-code, reparse it, run deterministic validation, and inspect block traceability.
 26. Compare draft versions and export explicitly non-production JSON or Markdown.
+27. Import paired CL/NCL and historical G-code against an exact machine revision.
+28. Review flexible span alignment, unmatched records, provenance, and deterministic findings.
+29. Explicitly verify historical pairs and explore confirmed patterns without merging machine/post contexts.
+30. Review programmed CL/G-code motion in XY/XZ/YZ with alignment and deterministic-finding overlays.
+31. Preview exact-machine verified translation retrieval without invoking AI.
+32. Explicitly request a structured mock or Azure advisory interpretation and inspect its example provenance and invocation audit.
+
+> **Toolpath boundary:** Toolpath Visualization represents parsed programmed motion only. It is not material-removal simulation, collision detection, final-part prediction, or machining verification.
+
+The fictional Phase 8 demo can be loaded from `backend/` with:
+
+```bash
+python -m app.scripts.seed_translation_demo
+```
 
 ---
 
@@ -330,6 +356,9 @@ Docker is the simplest way to preserve the known Python 3.12 environment.
 20260728_02  Phase 5 profile extraction
 20260728_03  Controller identity separation
 20260729_01  Phase 6 approved-program standards
+20260811_01  G-POST Generator domain
+20260812_01  G-POST V1 semantics
+20260812_02  G-POST data correction and backfill
 ```
 
 Never edit an applied migration. Add a new revision with the current head as
@@ -498,6 +527,14 @@ docker compose down -v
 | `OPENAI_BASE_URL` | OpenAI API URL | Reserved provider boundary |
 | `OPENAI_CHAT_MODEL` | empty | Optional future provider configuration |
 | `OPENAI_EMBEDDING_MODEL` | empty | Optional future provider configuration |
+| `TRANSLATION_AI_PROVIDER` | `mock` | `disabled`, `mock`, or explicit `azure_openai` |
+| `AZURE_OPENAI_ENDPOINT` | empty | Server-only approved Azure resource endpoint |
+| `AZURE_OPENAI_DEPLOYMENT` | empty | Approved Azure model deployment |
+| `AZURE_OPENAI_MODEL` | empty | Optional safe display/audit model identifier |
+| `AZURE_OPENAI_AUTH_MODE` | `entra_id` | Entra/managed identity preferred; `api_key` fallback |
+| `AZURE_OPENAI_API_KEY` | empty | Optional server-only fallback; never sent to frontend or persisted |
+| `TRANSLATION_AI_TIMEOUT_SECONDS` | `20` | External explanation timeout |
+| `TRANSLATION_AI_MAX_RETRIES` | `2` | Transient SDK retry limit |
 | `DOCUMENT_CHUNK_SIZE` | `900` | Character target |
 | `DOCUMENT_CHUNK_OVERLAP` | `150` | Must be smaller than chunk size |
 | `RETRIEVAL_TOP_K` | `6` | Manual-assistant retrieval count |
@@ -1400,6 +1437,7 @@ A reproduction is functionally close only when it can:
 - Simple similar-program command-overlap scoring
 - Deterministic sequence diff rather than full operation semantics
 - Mock AI and embeddings by default
+- Azure translation support is explanation-only and requires organization configuration; no AI-generated executable program
 - SQLite is not the intended multi-user production database
 - Report formatting is functional rather than publication-grade
 
@@ -1447,6 +1485,19 @@ G-POST V1 uses shared configuration templates as the source of truth. CL/NCL map
 - [Program comparison](docs/program-comparison.md)
 - [Phase 6 audit](docs/phase-6-audit.md)
 - [Phase 6 manual checklist](docs/phase-6-manual-test-checklist.md)
+- [Revised R&D translation strategy](docs/rd-translation-strategy.md)
+- [R&D hypothesis and metrics](docs/rd-hypothesis.md)
+- [Translation dataset conceptual design](docs/translation-dataset-design.md)
+- [Translation Explorer concept](docs/translation-explorer-concept.md)
+- [Toolpath visualization strategy](docs/toolpath-visualization-strategy.md)
+- [Future Azure OpenAI integration plan](docs/azure-openai-integration-plan.md)
+- [Azure OpenAI translation provider](docs/azure-openai-provider.md)
+- [AI data-transmission boundary](docs/ai-data-transmission-boundary.md)
+- [Phase 10 manual checklist](docs/phase10-manual-test-checklist.md)
+- [Existing-post vs AI benchmark design](docs/ai-post-benchmark-design.md)
+- [Deterministic document extraction strategy](docs/deterministic-document-extraction-strategy.md)
+- [Development roadmap](docs/roadmap.md)
+- [Phase 7 reuse audit](docs/phase7-reuse-audit.md)
 - [G-POST V1 scope](docs/gpost-v1-scope.md)
 - [G-POST template/mapping model](docs/gpost-template-mapping-model.md)
 - [G-POST review semantics](docs/gpost-review-semantics.md)

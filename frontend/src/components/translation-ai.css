@@ -1,0 +1,24 @@
+.translation-ai-panel { display: grid; gap: 16px; margin-top: 18px; }
+.translation-ai-panel > header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.translation-ai-panel h2, .translation-ai-panel h3 { margin: 4px 0; }
+.ai-provider-status { display: grid; grid-template-columns: repeat(2, minmax(130px, 1fr)); margin: 0; border: 1px solid var(--steel); }
+.ai-provider-status div { padding: 8px 10px; }
+.ai-provider-status dt { font-size: .68rem; text-transform: uppercase; color: var(--muted); }
+.ai-provider-status dd { margin: 2px 0; font-weight: 700; text-transform: capitalize; }
+.ai-retrieval-form { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
+.ai-retrieval-form .full-width { grid-column: 1 / -1; }
+.ai-retrieval-results { display: grid; gap: 12px; border-top: 1px solid var(--steel); padding-top: 14px; }
+.ai-retrieval-results > header { display: flex; justify-content: space-between; gap: 14px; }
+.ai-retrieval-results table code { white-space: pre-wrap; font-size: .7rem; }
+.ai-explanation { padding: 16px; border-left: 4px solid var(--accent); background: #f4f8f5; }
+.ai-explanation > header { display: flex; justify-content: space-between; }
+.ai-explanation dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.ai-explanation dt { font-size: .7rem; text-transform: uppercase; color: var(--muted); }
+.ai-explanation dd { margin: 3px 0; }
+.ai-explanation dd a { margin-right: 8px; }
+.translation-ai-consent { display: grid; gap: 12px; }
+.translation-ai-consent > header, .translation-ai-consent > footer { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+.translation-detail-page:not(.tab-overview) > .translation-ai-consent { display: none; }
+.translation-ai-panel.compact .ai-retrieval-form { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+@media (max-width: 900px) { .translation-ai-panel > header { display: grid; } .ai-retrieval-form { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .ai-retrieval-form, .translation-ai-panel.compact .ai-retrieval-form, .ai-explanation dl { grid-template-columns: 1fr; } .ai-provider-status { grid-template-columns: 1fr; } }

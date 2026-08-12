@@ -25,6 +25,8 @@ from app.models.gpost import (
     GPostDraft, GPostDraftVersion, GPostMapping, GPostMappingEvidence,
     GPostPreviewRun,
 )
+from app.models.translation import TranslationAlignment, TranslationAlignmentLink, TranslationExample
+from app.models.translation_ai import AIInvocation
 
 __all__ = [
     "AnalysisFinding", "AnalysisProject", "AnswerCitation", "AuditEvent",
@@ -39,4 +41,5 @@ __all__ = [
     "ProgramComparisonFinding",
     "GPostDraft", "GPostDraftVersion", "GPostMapping",
     "GPostMappingEvidence", "GPostPreviewRun",
+    "TranslationExample", "TranslationAlignment", "TranslationAlignmentLink", "AIInvocation",
 ]

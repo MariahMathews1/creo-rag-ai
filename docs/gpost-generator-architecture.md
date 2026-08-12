@@ -1,5 +1,7 @@
 # G-POST Generator architecture
 
+The G-POST Generator remains an R&D tool for visualizing candidate configuration, reviewing templates and mappings, exercising deterministic post behavior, and validating previews. Under the revised strategy it may later compare mappings with verified historical CL/G-code behavior. Manual citations and historical translation evidence must remain separate evidence types with separate provenance and review semantics.
+
 The G-POST Generator is a separate, machine-scoped R&D workflow. It creates advisory draft post configurations; it does not connect to Creo or a CNC, execute programs, or approve production posts.
 
 ## Data flow
