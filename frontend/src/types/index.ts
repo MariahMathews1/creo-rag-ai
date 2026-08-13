@@ -267,7 +267,7 @@ export interface MachineProfileRevision {
   units?: string | null; notes?: string | null;
   safe_start_template: string | null; program_end_template: string | null;
   capabilities_json: Record<string, unknown>; machine_configuration_json: Record<string, unknown>;
-  review_summary: string | null; approved_at: string | null;
+  review_summary: string | null; created_at: string; updated_at: string; approved_at: string | null;
 }
 
 export interface ReferenceProgram {
@@ -362,6 +362,7 @@ export interface GPostDraft {
   machine_profile_snapshot_json: Record<string, unknown>; templates_json: Record<string, string>;
   unsupported_features_json: string[]; warnings_json: Array<Record<string, unknown>>;
   review_summary_json: Record<string, number>; created_at: string; updated_at: string;
+  mapping_count?: number;
   superseded_at: string | null; advisory_only: true; safety_notice: string;
 }
 
@@ -402,6 +403,14 @@ export interface GPostVersionDiff {
   left_draft_id: number; right_draft_id: number; mappings_added: string[];
   mappings_removed: string[]; templates_changed: string[]; conditions_changed: string[];
   evidence_changed: string[]; warnings_added: unknown[]; warnings_resolved: unknown[];
+}
+
+export interface GPostPreflight {
+  machine_ready: boolean; post_context_ready: boolean; cl_parse_status: string; cl_record_count: number;
+  required_behavior_keys: string[]; supported_behavior_keys: string[]; reviewed_behavior_keys: string[];
+  unreviewed_behavior_keys: string[]; unsupported_required_behaviors: string[];
+  blocking_issues: Array<Record<string, unknown>>; warnings: Array<Record<string, unknown>>;
+  generation_allowed: boolean; generation_allowed_with_warning: boolean;
 }
 
 export type TranslationStatus = "unknown" | "candidate" | "reviewed" | "verified_successful" | "deprecated" | "invalid";

@@ -50,14 +50,14 @@ export function NewAnalysisPage() {
 
   return (
     <section className="page">
-      <PageHeader eyebrow="Program review" title="New analysis" description="Pair source data with a configured machine, then run deterministic checks." />
+      <PageHeader eyebrow="Advanced tool" title="G-code Review" description="Check existing G-code against the selected machine configuration." />
       <SafetyBanner />
       <form className="analysis-form" onSubmit={submit}>
         <div className="form-section">
-          <div className="section-heading"><span>01</span><div><h2>Analysis setup</h2><p>Name this review and select its machine context.</p></div></div>
+          <div className="section-heading"><span>01</span><div><h2>Review setup</h2><p>Name this review and select the CNC machine.</p></div></div>
           <div className="form-grid two">
-            <label>Analysis name<input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. OP20 housing review" /></label>
-            <label>Machine profile<select aria-label="Machine profile" required value={profileId} onChange={(e) => setProfileId(e.target.value)}>
+            <label>Review name<input aria-label="Analysis name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. OP20 housing review" /></label>
+            <label>Machine<select aria-label="Machine profile" required value={profileId} onChange={(e) => setProfileId(e.target.value)}>
               {profiles.length === 0 && <option value="">{loadingProfiles ? "Loading machine profiles…" : "Create a machine profile first"}</option>}
               {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
             </select></label>
@@ -76,7 +76,7 @@ export function NewAnalysisPage() {
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="analysis-submit">
           <p>Analysis uses deterministic Python rules. Advisory AI cannot change rule results.</p>
-          <button className="button primary large" disabled={running || loadingProfiles || !profiles.length || !name.trim() || !gcodeSource.trim()}>{running ? "Running checks…" : "Run deterministic analysis →"}</button>
+          <button aria-label="Run deterministic analysis" className="button primary large" disabled={running || loadingProfiles || !profiles.length || !name.trim() || !gcodeSource.trim()}>{running ? "Reviewing G-code…" : "Review G-code →"}</button>
         </div>
       </form>
     </section>

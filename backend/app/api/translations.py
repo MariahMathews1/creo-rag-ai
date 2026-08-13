@@ -76,8 +76,17 @@ def create_translation(payload: TranslationCreate, response: Response, db: Sessi
 @router.post("/translations/{example_id}/ai-processing-consent", response_model=TranslationRead)
 def set_ai_processing_consent(example_id: int, payload: AIConsentRequest, db: Session = Depends(get_db)):
     row = example_or_404(example_id, db)
+    if payload.allowed and row.verification_status != "verified_successful":
+        raise HTTPException(409, "Only verified-successful examples are eligible for AI-processing consent")
     row.ai_processing_allowed = payload.allowed
-    audit(db, "translation_ai_processing_consent_changed", row, allowed=payload.allowed, reviewer_label=payload.reviewer_label)
+    audit(
+        db,
+        "translation_ai_consent_enabled" if payload.allowed else "translation_ai_consent_disabled",
+        row,
+        allowed=payload.allowed,
+        reviewer_label=payload.reviewer_label,
+        note=payload.note,
+    )
     db.commit()
     return example_or_404(example_id, db)
 

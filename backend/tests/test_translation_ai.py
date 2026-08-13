@@ -130,11 +130,31 @@ def test_explanation_rejects_example_outside_current_retrieval_scope(client, db_
 
 def test_individual_consent_requires_acknowledgement_and_audits(client, db_session, machine_profile):
     row, _ = create_pair(client, db_session, machine_profile, allowed=False)
+    original = {"cl": row.cl_source_text, "gcode": row.gcode_source_text, "cl_hash": row.cl_source_hash, "gcode_hash": row.gcode_source_hash, "revision": row.machine_profile_revision_id, "status": row.verification_status}
+    blank = client.post(f"/api/translations/{row.id}/ai-processing-consent", json={"allowed": True, "reviewer_label": "", "acknowledgement": True})
+    assert blank.status_code == 422
     denied = client.post(f"/api/translations/{row.id}/ai-processing-consent", json={"allowed": True, "reviewer_label": "Reviewer", "acknowledgement": False})
     assert denied.status_code == 422
-    enabled = client.post(f"/api/translations/{row.id}/ai-processing-consent", json={"allowed": True, "reviewer_label": "Reviewer", "acknowledgement": True})
+    enabled = client.post(f"/api/translations/{row.id}/ai-processing-consent", json={"allowed": True, "reviewer_label": "R&D Test Reviewer", "acknowledgement": True, "note": "Approved for controlled excerpts."})
     assert enabled.status_code == 200 and enabled.json()["ai_processing_allowed"] is True
-    event = db_session.scalar(select(AuditEvent).where(AuditEvent.event_type == "translation_ai_processing_consent_changed")); assert event.metadata_json["allowed"] is True
+    db_session.refresh(row)
+    assert {"cl": row.cl_source_text, "gcode": row.gcode_source_text, "cl_hash": row.cl_source_hash, "gcode_hash": row.gcode_source_hash, "revision": row.machine_profile_revision_id, "status": row.verification_status} == original
+    event = db_session.scalar(select(AuditEvent).where(AuditEvent.event_type == "translation_ai_consent_enabled")); assert event.metadata_json["allowed"] is True and event.metadata_json["reviewer_label"] == "R&D Test Reviewer"
+    eligible = client.post("/api/ai/translation/retrieve", json={"machine_profile_id": machine_profile.id, "machine_profile_revision_id": row.machine_profile_revision_id, "post_processor_revision": row.post_processor_revision, "operation_type": row.operation_type, "cl_text": "SPINDL/RPM,1200,CLW"}).json()
+    assert row.id in {item["example_id"] for item in eligible["examples"]}
+    no_confirmation = client.post(f"/api/translations/{row.id}/ai-processing-consent", json={"allowed": False, "reviewer_label": "R&D Test Reviewer", "acknowledgement": False})
+    assert no_confirmation.status_code == 422
+    disabled = client.post(f"/api/translations/{row.id}/ai-processing-consent", json={"allowed": False, "reviewer_label": "R&D Test Reviewer", "acknowledgement": True})
+    assert disabled.status_code == 200 and disabled.json()["ai_processing_allowed"] is False
+    assert db_session.scalar(select(AuditEvent).where(AuditEvent.event_type == "translation_ai_consent_disabled"))
+    ineligible = client.post("/api/ai/translation/retrieve", json={"machine_profile_id": machine_profile.id, "machine_profile_revision_id": row.machine_profile_revision_id, "post_processor_revision": row.post_processor_revision, "operation_type": row.operation_type, "cl_text": "SPINDL/RPM,1200,CLW"}).json()
+    assert row.id not in {item["example_id"] for item in ineligible["examples"]}
+
+
+def test_unverified_example_cannot_enable_ai_consent(client, db_session, machine_profile):
+    row, _ = create_pair(client, db_session, machine_profile, allowed=False, verified=False)
+    response = client.post(f"/api/translations/{row.id}/ai-processing-consent", json={"allowed": True, "reviewer_label": "Reviewer", "acknowledgement": True})
+    assert response.status_code == 409 and db_session.get(TranslationExample, row.id).ai_processing_allowed is False
 
 
 def test_azure_failures_are_typed_and_redacted():

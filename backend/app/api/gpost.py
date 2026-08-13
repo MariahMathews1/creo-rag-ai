@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.session import get_db
 from app.gpost.service import (
     SAFETY_NOTICE, audit, capability_snapshot, compare_drafts, default_templates,
-    controller_family_compatible, family_compatible, generate_preview, initial_mappings, markdown_export, review_summary,
+    controller_family_compatible, current_cl_preflight, family_compatible, generate_preview, initial_mappings, markdown_export, review_summary,
     revision_snapshot, snapshot_draft, validate_ownership,
 )
 from app.models.entities import DocumentChunk, MachineProfile, SourceDocument, utc_now
@@ -17,7 +17,7 @@ from app.models.program_standards import ReferenceProgram, StandardConvention
 from app.models.translation import TranslationAlignment, TranslationAlignmentLink, TranslationExample
 from app.translation.service import normalize_cl_pattern, normalize_gcode_pattern
 from app.schemas.gpost import (
-    GPostDraftCreate, GPostDraftRead, GPostDraftUpdate, GPostEvidenceCreate, GPostEvidenceRead, GPostMappingCreate,
+    GPostDraftCreate, GPostDraftRead, GPostDraftUpdate, GPostEvidenceCreate, GPostEvidenceRead, GPostMappingCreate, GPostPreflightRead,
     GPostMappingRead, GPostMappingUpdate, PreviewRead, PreviewRequest,
     RndValidationRequest, VersionCompareRead,
 )
@@ -286,6 +286,11 @@ def add_mapping_evidence(mapping_id: int, payload: GPostEvidenceCreate, db: Sess
 @router.post("/gpost-drafts/{draft_id}/preview", response_model=PreviewRead)
 def preview(draft_id: int, payload: PreviewRequest, db: Session = Depends(get_db)):
     return generate_preview(db, draft_or_404(draft_id, db), payload.cl_source)
+
+
+@router.post("/gpost-drafts/{draft_id}/preflight", response_model=GPostPreflightRead)
+def preflight(draft_id: int, payload: PreviewRequest, db: Session = Depends(get_db)):
+    return current_cl_preflight(db, draft_or_404(draft_id, db), payload.cl_source)
 
 
 @router.get("/gpost-drafts/{draft_id}/warnings")

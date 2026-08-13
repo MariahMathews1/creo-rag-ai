@@ -170,6 +170,22 @@ class PreviewRequest(BaseModel):
     cl_source: str = Field(min_length=1)
 
 
+class GPostPreflightRead(BaseModel):
+    machine_ready: bool
+    post_context_ready: bool
+    cl_parse_status: str
+    cl_record_count: int
+    required_behavior_keys: list[str]
+    supported_behavior_keys: list[str]
+    reviewed_behavior_keys: list[str]
+    unreviewed_behavior_keys: list[str]
+    unsupported_required_behaviors: list[str]
+    blocking_issues: list[dict]
+    warnings: list[dict]
+    generation_allowed: bool
+    generation_allowed_with_warning: bool
+
+
 class PreviewRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

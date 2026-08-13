@@ -1,5 +1,9 @@
 # Application walkthrough
 
+> V1 navigation and terminology are documented in [V1 NC programmer workflow](v1-product-workflow.md). The detailed material below remains useful for advanced engineering workflows.
+
+G-POST now evaluates readiness against the current CL input. Supported but unreviewed behavior is warned; unrelated mappings do not block the preview. See [Current-CL G-POST preflight](v1-gpost-preflight.md).
+
 The primary workflows remain Dashboard, Machine Profiles, Documents, Manual Assistant, Analysis/Traceability, Profile Extraction, Approved Programs, and Standards. G-POST Generator is an additional top-level tab.
 
 Open **G-POST Generator** to see the dense table of existing versioned drafts. Creating a draft is a guided three-step flow: select a contextualized machine row, review source readiness and blockers, then confirm the draft name, revision, and controller family.

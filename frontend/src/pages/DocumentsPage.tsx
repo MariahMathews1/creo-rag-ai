@@ -5,19 +5,12 @@ import { PageHeader } from "../components/PageHeader";
 import type { DocumentType, MachineProfile, SourceDocument } from "../types";
 
 const types: Array<[DocumentType, string]> = [
-  ["controller_manual", "Controller manual"],
-  ["machine_manual", "Machine manual"],
-  ["programming_manual", "Programming manual"],
-  ["company_standard", "Company standard"],
-  ["approved_program", "Approved reference program"],
-  ["setup_document", "Setup document"],
-  ["post_processor_document", "Post-processor document"],
-  ["operator_manual", "Operator manual"],
-  ["specification_document", "Specification document"],
-  ["maintenance_manual", "Maintenance manual"],
-  ["parameter_list", "Parameter list"],
-  ["machine_configuration_document", "Machine configuration document"],
-  ["purchase_specification", "Purchase specification"],
+  ["machine_manual", "Machine Manual"],
+  ["controller_manual", "Controller Manual"],
+  ["programming_manual", "Programming Manual"],
+  ["specification_document", "Specification"],
+  ["company_standard", "Internal Procedure"],
+  ["post_processor_document", "Reference"],
   ["other", "Other"],
 ];
 
@@ -75,13 +68,13 @@ export function DocumentsPage() {
   }
 
   return <section className="page">
-    <PageHeader eyebrow="Machine knowledge" title="Documents" description="Controlled local reference material for citation-grounded technical answers." />
+    <PageHeader eyebrow="Machine references" title="Documents" description="Upload manuals, specifications, internal procedures, and references for the selected machine." />
     <div className="reference-toolbar">
-      <label>Machine profile<select value={machineId} onChange={(event) => setMachineId(event.target.value)}>
+      <label>Machine<select aria-label="Machine profile" value={machineId} onChange={(event) => setMachineId(event.target.value)}>
         {!machines.length && <option value="">No machine profiles available</option>}
         {machines.map((machine) => <option value={machine.id} key={machine.id}>{machine.name}</option>)}
       </select></label>
-      <Link className="button secondary" to={`/manual-assistant?machine=${machineId}`}>Open Manual Assistant →</Link>
+      <Link className="button secondary" to={`/machine-assistant?machine=${machineId}`}>Open Machine Assistant →</Link>
     </div>
     {error && <p role="alert" className="form-error">{error}</p>}
     <div className="documents-grid">

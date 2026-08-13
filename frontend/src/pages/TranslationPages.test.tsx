@@ -22,18 +22,27 @@ const example = { id: 3, machine_profile_id: 1, machine_profile_revision_id: 2, 
 
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.listTranslations).mockResolvedValue([example] as never); vi.mocked(api.listProfiles).mockResolvedValue([machine] as never); vi.mocked(api.getTranslationSummary).mockResolvedValue({ total: 1, candidates: 1, reviewed: 0, verified: 0, deprecated: 0, invalid: 0, by_machine: [], by_post_revision: [], by_operation: [] }); vi.mocked(api.getTranslationExplorer).mockResolvedValue([{ machine_profile_id: 1, machine: "Fictional KLS", controller: "FANUC", post_revision: "R12", operation: "turning", cl_command: "SPINDL", cl_pattern: "SPINDL/RPM,{rpm}", gcode_pattern: "S{rpm} M03", count: 2 }]); vi.mocked(api.getTranslation).mockResolvedValue(example as never); vi.mocked(api.confirmTranslationLink).mockResolvedValue({ ...link, review_status: "confirmed" } as never); vi.mocked(api.getTranslationHistory).mockResolvedValue([]); vi.mocked(api.getTranslationAIProviderStatus).mockResolvedValue({ provider: "mock", configured: true, reachable: true, authentication_mode: "none", deployment: "fixture", model: "mock", external_processing: false, public_web: false, data_source: "Verified Internal Translation Examples Only", mode: "R&D", error_code: null }); vi.mocked(api.retrieveTranslationExamples).mockResolvedValue({ retrieval_scope: "exact_machine_exact_post", eligible_count: 1, public_web: false, ai_called: false, warnings: [], examples: [{ example_id: 3, name: "Fictional spindle pair", machine_profile_id: 1, machine: "Fictional KLS", machine_profile_revision_id: 2, controller: "FANUC", post_revision: "R12", operation: "turning", cl_excerpt: "SPINDL/RPM,1200", gcode_excerpt: "S1200 M03", cl_pattern_match: "strong", alignment_coverage: 100, verification_status: "verified_successful", retrieval_reasons: ["exact_machine", "exact_post_revision"], ai_processing_allowed: true }] }); vi.mocked(api.explainTranslation).mockResolvedValue({ status: "advisory_interpretation", input_cl: "SPINDL/RPM,1200,CLW", interpreted_operation: "clockwise_spindle_start", suggested_mapping_pattern: "S{rpm} M03", short_rationale: "Observed verified pattern.", example_ids: [3], uncertainties: ["Low"], unsupported_features: [], warnings: [], provider_metadata: { provider: "mock" }, invocation_id: 4, advisory_only: true, safety_notice: "R&D ADVISORY INTERPRETATION ONLY" }); vi.mocked(api.setTranslationAIConsent).mockResolvedValue({ ...example, ai_processing_allowed: true } as never); vi.mocked(api.getTranslationToolpath).mockResolvedValue({ source: "both", machine_type: "lathe", default_view: "XZ", coordinate_context: "work", bounds: { min_x: 0, max_x: 1, min_y: 0, max_y: 0, min_z: 0, max_z: 1 }, summary: { segments: 1, rapid: 0, feed: 1, arcs: 0, tools: 0, operations: 0, unresolved_geometry: 0, visualization_simplified: false }, warnings: [], comparison_summary: { aligned_motion_pairs: 1, matching_geometry: 1 }, advisory_only: true, safety_notice: "TOOLPATH VISUALIZATION ONLY", segments: [{ id: "cl-1", source_type: "cl", source_record_id: 1, source_line_start: 1, source_line_end: 1, operation_id: null, tool_number: null, motion_type: "linear", start_point: { x: 0, y: 0, z: 0 }, end_point: { x: 1, y: 0, z: 1 }, center_point: null, radius: null, path_points: [], plane: null, feed_rate: null, spindle_speed: 1200, rapid: false, arc_direction: null, helical: false, tool_axis: null, alignment_link_id: 8, aligned_segment_ids: [], finding_ids: [], sequence_index: 0, visualizable: true, unmatched: false, geometry_status: "matching_geometry", metadata_json: {} }] } as never); });
 
-test("translation library shows governed pairs and isolated verified patterns", async () => {
-  const user = userEvent.setup(); render(<MemoryRouter><TranslationExamplesPage /></MemoryRouter>);
+test("translation Advanced menu routes to three distinct addressable destinations", async () => {
+  const user = userEvent.setup(); render(<MemoryRouter initialEntries={["/translations"]}><Routes><Route path="/translations/*" element={<TranslationExamplesPage />} /></Routes></MemoryRouter>);
   expect(await screen.findByText("Fictional spindle pair")).toBeInTheDocument();
-  expect(screen.getByText("Historical evidence, not production authorization")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Pattern Explorer" }));
+  await user.click(screen.getByRole("button", { name: "Advanced" }));
+  await user.click(screen.getByRole("menuitem", { name: "Analyze Translation Patterns" }));
+  expect(screen.getByRole("heading", { level: 1, name: "Analyze Translation Patterns" })).toBeInTheDocument();
   expect(screen.getByText("SPINDL/RPM,{rpm}")).toBeInTheDocument();
-  expect(screen.getByText("S{rpm} M03")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Advanced" }));
+  await user.click(screen.getByRole("menuitem", { name: "AI Retrieval Experiment" }));
+  expect(screen.getByRole("heading", { level: 2, name: "AI Retrieval Preview" })).toBeInTheDocument();
+  expect(screen.queryByText("Deterministic Pattern Explorer")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Advanced" }));
+  await user.click(screen.getByRole("menuitem", { name: "Dataset Technical Details" }));
+  expect(screen.getByRole("heading", { level: 1, name: "Dataset Technical Details" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "AI Governance" })).toBeInTheDocument();
+  expect(screen.queryByText("Deterministic Pattern Explorer")).not.toBeInTheDocument();
 });
 
 test("detail workspace exposes alignment rationale and reviewer actions", async () => {
   const user = userEvent.setup(); render(<MemoryRouter initialEntries={["/translations/3"]}><Routes><Route path="/translations/:exampleId" element={<TranslationDetailPage />} /></Routes></MemoryRouter>);
-  expect(await screen.findByText("Pair alignment")).toBeInTheDocument();
+  expect(await screen.findByText("Technical Alignment Review")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: /one to one/i }));
   expect(screen.getByText(/same_spindle_speed/)).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Confirm" }));
@@ -43,7 +52,7 @@ test("detail workspace exposes alignment rationale and reviewer actions", async 
 test("translation detail loads a paired CL and G-code toolpath", async () => {
   const user = userEvent.setup();
   render(<MemoryRouter initialEntries={["/translations/3"]}><Routes><Route path="/translations/:exampleId" element={<TranslationDetailPage />} /></Routes></MemoryRouter>);
-  await screen.findByText("Pair alignment");
+  await screen.findByText("Technical Alignment Review");
   await user.click(screen.getByRole("button", { name: /toolpath/i }));
   expect(await screen.findByText("TOOLPATH VISUALIZATION ONLY")).toBeInTheDocument();
   expect(api.getTranslationToolpath).toHaveBeenCalledWith(3);
@@ -56,7 +65,7 @@ test("guided create flow binds an exact revision and accepts pasted paired sourc
   const user = userEvent.setup();
   vi.mocked(api.listProfileRevisions).mockResolvedValue([{ id: 2, machine_profile_id: 1, revision_number: 4, status: "approved" }] as never);
   vi.mocked(api.createTranslation).mockResolvedValue(example as never);
-  render(<MemoryRouter><TranslationExamplesPage /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/translations"]}><Routes><Route path="/translations/*" element={<TranslationExamplesPage />} /></Routes></MemoryRouter>);
   await user.click(await screen.findByRole("button", { name: /Import paired example/ }));
   const form = screen.getByRole("heading", { name: "Import paired translation evidence" }).closest("form") as HTMLFormElement;
   await user.selectOptions(within(form).getByLabelText("Machine"), "1");
@@ -73,8 +82,9 @@ test("guided create flow binds an exact revision and accepts pasted paired sourc
 
 test("AI retrieval is inspectable and never invokes the provider until requested", async () => {
   const user = userEvent.setup(); vi.mocked(api.listProfileRevisions).mockResolvedValue([{ id: 2, machine_profile_id: 1, revision_number: 4, status: "approved" }] as never);
-  render(<MemoryRouter><TranslationExamplesPage /></MemoryRouter>);
-  await user.click(await screen.findByRole("button", { name: "AI Retrieval Preview" }));
+  render(<MemoryRouter initialEntries={["/translations"]}><Routes><Route path="/translations/*" element={<TranslationExamplesPage />} /></Routes></MemoryRouter>);
+  await user.click(await screen.findByRole("button", { name: "Advanced" }));
+  await user.click(screen.getByRole("menuitem", { name: "AI Retrieval Experiment" }));
   await user.selectOptions(screen.getByLabelText("Machine"), "1");
   await user.type(screen.getByLabelText("CL segment"), "SPINDL/RPM,1200,CLW");
   await user.click(screen.getByRole("button", { name: "Find Similar Verified Examples" }));
@@ -90,8 +100,9 @@ test("AI panel exposes provider boundaries and a loading state for explicit gene
   const user = userEvent.setup(); vi.mocked(api.listProfileRevisions).mockResolvedValue([{ id: 2, machine_profile_id: 1, revision_number: 4, status: "approved" }] as never);
   let resolveExplanation!: (value: Awaited<ReturnType<typeof api.explainTranslation>>) => void;
   vi.mocked(api.explainTranslation).mockReturnValue(new Promise((resolve) => { resolveExplanation = resolve; }));
-  render(<MemoryRouter><TranslationExamplesPage /></MemoryRouter>);
-  await user.click(await screen.findByRole("button", { name: "AI Retrieval Preview" }));
+  render(<MemoryRouter initialEntries={["/translations"]}><Routes><Route path="/translations/*" element={<TranslationExamplesPage />} /></Routes></MemoryRouter>);
+  await user.click(await screen.findByRole("button", { name: "Advanced" }));
+  await user.click(screen.getByRole("menuitem", { name: "AI Retrieval Experiment" }));
   expect(await screen.findByText("mock")).toBeInTheDocument();
   expect(screen.getByText("External Processing").parentElement).toHaveTextContent("Disabled");
   expect(screen.getByText("Public Web").parentElement).toHaveTextContent("Disabled");
@@ -111,8 +122,9 @@ test.each([
 ])("AI panel renders a safe %s response", async (_label, message) => {
   const user = userEvent.setup(); vi.mocked(api.listProfileRevisions).mockResolvedValue([{ id: 2, machine_profile_id: 1, revision_number: 4, status: "approved" }] as never);
   vi.mocked(api.explainTranslation).mockRejectedValue(new Error(message));
-  render(<MemoryRouter><TranslationExamplesPage /></MemoryRouter>);
-  await user.click(await screen.findByRole("button", { name: "AI Retrieval Preview" }));
+  render(<MemoryRouter initialEntries={["/translations"]}><Routes><Route path="/translations/*" element={<TranslationExamplesPage />} /></Routes></MemoryRouter>);
+  await user.click(await screen.findByRole("button", { name: "Advanced" }));
+  await user.click(screen.getByRole("menuitem", { name: "AI Retrieval Experiment" }));
   await user.selectOptions(screen.getByLabelText("Machine"), "1");
   await user.type(screen.getByLabelText("CL segment"), "SPINDL/RPM,1200,CLW");
   await user.click(screen.getByRole("button", { name: "Find Similar Verified Examples" }));
@@ -121,10 +133,41 @@ test.each([
 });
 
 test("AI permission requires an explicit record-level acknowledgement", async () => {
+  const verified = { ...example, verification_status: "verified_successful", ai_processing_allowed: false };
+  vi.mocked(api.getTranslation).mockResolvedValue(verified as never);
+  vi.mocked(api.getTranslationAIProviderStatus).mockResolvedValue({ provider: "disabled", configured: false, reachable: false, authentication_mode: null, deployment: null, model: null, external_processing: false, public_web: false, data_source: "Verified Internal Translation Examples Only", mode: "R&D", error_code: null });
+  vi.mocked(api.setTranslationAIConsent).mockResolvedValue({ ...verified, ai_processing_allowed: true } as never);
   const user = userEvent.setup(); render(<MemoryRouter initialEntries={["/translations/3"]}><Routes><Route path="/translations/:exampleId" element={<TranslationDetailPage />} /></Routes></MemoryRouter>);
-  await screen.findByText("AI Processing Permission");
-  await user.type(screen.getByLabelText("Reviewer label"), "Reviewer");
+  const heading = await screen.findByText("AI Processing Permission");
+  const consent = heading.closest("section") as HTMLElement;
+  const reviewerInput = within(consent).getByLabelText("Reviewer label");
+  const enable = within(consent).getByRole("button", { name: "Enable AI Processing" });
+  expect(reviewerInput).toBeEnabled();
+  expect(screen.getByLabelText("Verification reviewer label")).toBeDisabled();
+  expect(enable).toBeDisabled();
+  await user.type(reviewerInput, "R&D Test Reviewer");
+  expect(enable).toBeDisabled();
   await user.click(screen.getByLabelText(/explicitly allow eligible excerpts/i));
-  await user.click(screen.getByRole("button", { name: "Enable AI Processing" }));
-  await waitFor(() => expect(api.setTranslationAIConsent).toHaveBeenCalledWith(3, true, "Reviewer", true));
+  expect(enable).toBeEnabled();
+  await user.click(enable);
+  await waitFor(() => expect(api.setTranslationAIConsent).toHaveBeenCalledWith(3, true, "R&D Test Reviewer", true));
+  expect(await screen.findByText("AI processing permission enabled.")).toHaveAttribute("role", "status");
+  expect(within(consent).getByText("Allowed")).toBeInTheDocument();
+});
+
+test("AI permission can be disabled without provider connectivity", async () => {
+  const allowed = { ...example, verification_status: "verified_successful", ai_processing_allowed: true };
+  vi.mocked(api.getTranslation).mockResolvedValue(allowed as never);
+  vi.mocked(api.setTranslationAIConsent).mockResolvedValue({ ...allowed, ai_processing_allowed: false } as never);
+  const user = userEvent.setup(); render(<MemoryRouter initialEntries={["/translations/3"]}><Routes><Route path="/translations/:exampleId" element={<TranslationDetailPage />} /></Routes></MemoryRouter>);
+  const heading = await screen.findByText("AI Processing Permission");
+  const consent = heading.closest("section") as HTMLElement;
+  const disable = within(consent).getByRole("button", { name: "Disable AI Processing" });
+  expect(disable).toBeDisabled();
+  await user.type(within(consent).getByLabelText("Reviewer label"), "R&D Test Reviewer");
+  await user.click(within(consent).getByLabelText(/removed from future AI retrieval/i));
+  await user.click(disable);
+  await waitFor(() => expect(api.setTranslationAIConsent).toHaveBeenCalledWith(3, false, "R&D Test Reviewer", true));
+  expect(await screen.findByText("AI processing permission disabled.")).toHaveAttribute("role", "status");
+  expect(within(consent).getByText("Not Allowed")).toBeInTheDocument();
 });

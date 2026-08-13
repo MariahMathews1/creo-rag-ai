@@ -6,6 +6,8 @@ type FormState = {
   manufacturer: string;
   model: string;
   controller_name: string;
+  controller_manufacturer: string;
+  controller_model: string;
   controller_version: string;
   machine_type: MachineType;
   axis_count: string;
@@ -33,6 +35,8 @@ const blank: FormState = {
   manufacturer: "",
   model: "",
   controller_name: "",
+  controller_manufacturer: "",
+  controller_model: "",
   controller_version: "",
   machine_type: "mill",
   axis_count: "3",
@@ -70,6 +74,8 @@ function initialState(profile?: MachineProfile | null): FormState {
     manufacturer: profile.manufacturer,
     model: profile.model,
     controller_name: profile.controller_name,
+    controller_manufacturer: profile.controller_manufacturer ?? "",
+    controller_model: profile.controller_model ?? "",
     controller_version: profile.controller_version ?? "",
     machine_type: profile.machine_type,
     axis_count: String(profile.axis_count),
@@ -119,6 +125,8 @@ export function MachineProfileForm({
       manufacturer: form.manufacturer.trim(),
       model: form.model.trim(),
       controller_name: form.controller_name.trim(),
+      controller_manufacturer: form.controller_manufacturer.trim() || null,
+      controller_model: form.controller_model.trim() || null,
       controller_version: form.controller_version.trim() || null,
       machine_type: form.machine_type,
       axis_count: Number(form.axis_count),
@@ -167,12 +175,13 @@ export function MachineProfileForm({
           </select></label>
           <label>Manufacturer<input required value={form.manufacturer} onChange={(e) => change("manufacturer", e.target.value)} /></label>
           <label>Model<input required value={form.model} onChange={(e) => change("model", e.target.value)} /></label>
-          <label>Controller name<input required value={form.controller_name} onChange={(e) => change("controller_name", e.target.value)} /></label>
+          <label>Controller family<input aria-label="Controller name" required value={form.controller_name} onChange={(e) => change("controller_name", e.target.value)} /></label>
+          <label>Controller manufacturer<input value={form.controller_manufacturer} onChange={(e) => change("controller_manufacturer", e.target.value)} /></label>
+          <label>Controller model<input value={form.controller_model} onChange={(e) => change("controller_model", e.target.value)} /></label>
           <label>Controller version<input value={form.controller_version} onChange={(e) => change("controller_version", e.target.value)} /></label>
           <label>Axis count<input type="number" min="2" max="12" required value={form.axis_count} onChange={(e) => change("axis_count", e.target.value)} /></label>
         </div>
       </div>
-
       <div className="form-section">
         <div className="section-heading">
           <span>02</span>
@@ -194,10 +203,12 @@ export function MachineProfileForm({
         </div>
       </div>
 
-      <div className="form-section">
+      <details className="form-section advanced-machine-details">
+        <summary><div className="section-heading"><span>03</span><div><h2>Advanced Machine Details</h2><p>Command policy, review thresholds, and supporting metadata.</p></div></div></summary>
+      <div>
         <div className="section-heading">
-          <span>03</span>
-          <div><h2>Controller policy</h2><p>Separate codes with spaces or commas.</p></div>
+          <span>A</span>
+          <div><h2>Programming command policy</h2><p>Separate codes with spaces or commas.</p></div>
         </div>
         <div className="form-grid">
           <label>Supported work offsets<input value={form.supported_work_offsets} onChange={(e) => change("supported_work_offsets", e.target.value)} /></label>
@@ -206,6 +217,7 @@ export function MachineProfileForm({
           <label>Approved M-codes<textarea rows={3} value={form.approved_m_codes} onChange={(e) => change("approved_m_codes", e.target.value)} /></label>
         </div>
       </div>
+      </details>
 
       <div className="form-section">
         <div className="section-heading">

@@ -1,8 +1,8 @@
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
-  under_review: "Under Review",
-  review_required: "Under Review",
-  validated_for_rnd: "R&D Validated",
+  under_review: "Ready for R&D Test",
+  review_required: "Needs Configuration",
+  validated_for_rnd: "R&D Tested",
   superseded: "Superseded",
   archived: "Archived",
   blocked: "Blocked",
@@ -24,7 +24,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function GPostStatusBadge({ status, large = false }: { status: string; large?: boolean }) {
   const normalized = status === "review_required" ? "under_review" : status;
-  return <span aria-label={`Status: ${STATUS_LABELS[status] ?? status.replaceAll("_", " ")}`} className={`gpost-status ${normalized}${large ? " large" : ""}`}>
+  const help: Record<string, string> = { under_review: "Sufficient machine and post configuration for R&D previews of supported CL/NCL. Not approved for machine use.", review_required: "A required machine or post configuration issue needs attention.", validated_for_rnd: "An R&D preview was generated and deterministic checks completed. Not production-approved." };
+  return <span title={help[status]} aria-label={`Status: ${STATUS_LABELS[status] ?? status.replaceAll("_", " ")}`} className={`gpost-status ${normalized}${large ? " large" : ""}`}>
     {STATUS_LABELS[status] ?? status.replaceAll("_", " ")}
   </span>;
 }

@@ -41,6 +41,8 @@
 .toolpath-comparison dd { margin: 2px 0 0; font-weight: 700; }
 .toolpath-detail > * { display: block; margin: 3px 0; }
 .toolpath-warnings { margin: 0; padding: 10px 28px; background: #fff7df; }
+.toolpath-dimensional-note { margin: 0; padding: 9px 12px; border-left: 3px solid var(--toolpath-rapid); background: #eef2ef; color: #52625a; font-size: .9rem; }
+.toolpath-toolbar.simple{display:flex;align-items:end;gap:12px;padding:10px;background:#fff;border:1px solid var(--steel)}.toolpath-toolbar.simple fieldset{display:flex;gap:7px;align-items:center;border:0;margin:0;padding:0}.toolpath-toolbar.simple legend{font-size:.68rem;font-weight:800;text-transform:uppercase}.toolpath-toolbar.simple button.active{background:var(--accent);color:#fff}.toolpath-advanced{padding:9px 12px;background:#fff;border:1px solid var(--steel);border-top:0}.toolpath-advanced>summary{cursor:pointer;font-weight:750}.toolpath-assumptions{border-left:4px solid #d19a25;background:#fff7df;padding:10px 12px}.toolpath-assumptions h3{margin:0}.toolpath-assumptions .toolpath-warnings{padding:7px 17px}.toolpath-canvas-wrap canvas{min-height:420px}
 .toolpath-table { background: #fff; border: 1px solid var(--steel); padding: 10px; overflow: auto; }
 .toolpath-table table { width: 100%; border-collapse: collapse; }
 .toolpath-table th, .toolpath-table td { padding: 7px; border-bottom: 1px solid #dde4df; text-align: left; }

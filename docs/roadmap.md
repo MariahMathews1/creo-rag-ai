@@ -1,5 +1,13 @@
 # Development roadmap
 
+## V1 product simplification — complete
+
+Primary navigation, Dashboard, Machines, Documents, Translation Examples, G-POST Generator, Machine Assistant, and G-code Review now follow the NC programmer mental model. See [V1 UI reduction decisions](v1-ui-reduction-decisions.md).
+
+## V1 usability polish and contextual status semantics — complete
+
+Action hierarchy, shared menus, simplified toolpath controls, contextual G-POST statuses, and current-CL preflight refine the V1 workflow without expanding generation scope.
+
 ## Phase 7 — Verified CL/G-code Translation Dataset Foundation
 
 Define the trust model, conceptual entity, provenance, verification states, machine isolation, operation taxonomy, data boundaries, and reuse plan. This architectural milestone does not add storage or an explorer.

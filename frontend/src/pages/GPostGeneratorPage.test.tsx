@@ -11,7 +11,7 @@ vi.mock("../api/client", () => ({ api: {
   listProfiles: vi.fn(), listProfileRevisions: vi.fn(), listDocuments: vi.fn(),
   listReferencePrograms: vi.fn(), listStandards: vi.fn(), listGPostDrafts: vi.fn(),
   listGPostMappings: vi.fn(), createGPostDraft: vi.fn(), getGPostDraft: vi.fn(),
-  updateGPostDraft: vi.fn(), updateGPostMapping: vi.fn(), previewGPost: vi.fn(),
+  updateGPostDraft: vi.fn(), updateGPostMapping: vi.fn(), preflightGPost: vi.fn(), previewGPost: vi.fn(),
   createGPostVersion: vi.fn(), compareGPostVersions: vi.fn(), archiveGPostDraft: vi.fn(),
   getGPostHistoricalTranslationEvidence: vi.fn(),
   getGPostPreviewToolpath: vi.fn(),
@@ -150,6 +150,7 @@ beforeEach(() => {
   vi.mocked(api.updateGPostDraft).mockImplementation(async (_id, payload) => ({ ...draft, ...payload, selected_document_ids_json: payload.selected_document_ids ?? draft.selected_document_ids_json }) as never);
   vi.mocked(api.updateGPostMapping).mockImplementation(async (_id, payload) => ({ ...mappings[0], ...payload }) as never);
   vi.mocked(api.previewGPost).mockResolvedValue(preview as never);
+  vi.mocked(api.preflightGPost).mockResolvedValue({ machine_ready: true, post_context_ready: true, cl_parse_status: "parsed", cl_record_count: 10, required_behavior_keys: ["loadtl", "spindl_cw", "fedrat", "coolnt_on", "rapid", "goto", "coolnt_off", "spindl_off", "fini"], supported_behavior_keys: ["loadtl", "spindl_cw", "fedrat", "coolnt_on", "rapid", "goto", "coolnt_off", "spindl_off", "fini"], reviewed_behavior_keys: ["loadtl"], unreviewed_behavior_keys: ["spindl_cw"], unsupported_required_behaviors: [], blocking_issues: [], warnings: [{ code: "GPOST_UNREVIEWED_CURRENT_CL", message: "1 supported behavior has not been manually reviewed." }], generation_allowed: true, generation_allowed_with_warning: true } as never);
   vi.mocked(api.getDocumentContent).mockResolvedValue({ document, pages: [{ page_number: 84, text: "T codes select a turret station.", character_count: 32 }], extracted_text: "T codes select a turret station.", chunks: [] } as never);
   vi.mocked(api.createGPostDraft).mockResolvedValue(draft as never);
   vi.mocked(api.getGPostHistoricalTranslationEvidence).mockResolvedValue({ mapping_id: 5, machine_profile_id: 1, cl_command: "LOADTL", verified_example_count: 2, observations: [], read_only: true, mapping_changed: false } as never);
@@ -167,7 +168,7 @@ test("landing page shows existing drafts instead of the CL test harness", async 
   render(<MemoryRouter><GPostGeneratorPage /></MemoryRouter>);
   expect(await screen.findByText("KLS-1840N FANUC Post")).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "Mappings" })).toBeInTheDocument();
-  expect(screen.getByText("Under Review")).toBeInTheDocument();
+  expect(screen.getByText("Needs Configuration")).toBeInTheDocument();
   expect(screen.queryByLabelText("CL / NCL Input")).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Open/ })).toHaveAttribute("href", "/gpost/4");
 });
@@ -176,7 +177,7 @@ test("landing page provides the specified empty state", async () => {
   vi.mocked(api.listGPostDrafts).mockResolvedValue([] as never);
   render(<MemoryRouter><GPostGeneratorPage /></MemoryRouter>);
   expect(await screen.findByText("No G-POST configurations yet")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Create G-POST" })).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: /Create (G-POST|Draft)/ }).length).toBeGreaterThan(0);
   expect(screen.getByRole("link", { name: "View Machine Profiles" })).toHaveAttribute("href", "/machines");
 });
 
@@ -187,9 +188,9 @@ test("guided creation presents machine context, readiness, and draft identity", 
   expect(await screen.findByText("Select Machine", { selector: "h1" })).toBeInTheDocument();
   expect(screen.getByText("Profile coverage")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Select" }));
-  expect(screen.getByText("G-POST Readiness", { selector: "h1" })).toBeInTheDocument();
-  expect(screen.getByText("✓ 1 reference documents")).toBeInTheDocument();
-  expect(screen.getByText("⚠ 1 machine profile fields unresolved")).toBeInTheDocument();
+  expect(screen.getByText("Confirm Post Context", { selector: "h1" })).toBeInTheDocument();
+  expect(screen.getByText("✓ 1 machine documents available")).toBeInTheDocument();
+  expect(screen.getByText("⚠ 1 machine information fields may need review")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Continue Setup" }));
   expect(screen.getByDisplayValue("KLS-1840N 0i-Mate TF Post")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Create Draft" }));
@@ -199,21 +200,21 @@ test("guided creation presents machine context, readiness, and draft identity", 
 
 test("workspace overview, sources, and configuration progressively disclose context", async () => {
   const user = userEvent.setup();
-  render(<MemoryRouter initialEntries={["/gpost/4"]}><Routes><Route path="/gpost/:draftId" element={<GPostWorkspacePage />} /></Routes></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/gpost/4"]}><Routes><Route path="/gpost/:draftId/*" element={<GPostWorkspacePage />} /></Routes></MemoryRouter>);
   expect(await screen.findByText("KLS-1840N FANUC Post", { selector: "h1" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { level: 1, name: "KLS-1840N FANUC Post" })).toHaveClass("gpost-draft-title");
   expect(screen.getByText("G-POST v3")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "overview" })).toHaveAttribute("aria-current", "page");
-  expect(screen.getAllByLabelText("Status: Under Review").length).toBeGreaterThan(0);
-  expect(screen.getByText("Approved machine profile revision")).toBeInTheDocument();
-  expect(screen.getAllByLabelText("Status: Inherited").length).toBeGreaterThan(0);
-  await user.click(screen.getByRole("button", { name: "sources" }));
+  expect(screen.getByRole("button", { name: "Advanced Post Configuration" })).toBeInTheDocument();
+  expect(screen.getAllByLabelText("Status: Needs Configuration").length).toBeGreaterThan(0);
+  expect(screen.getByRole("heading", { name: "Generate R&D Draft" })).toBeInTheDocument();
+  await user.click(screen.getByRole("link", { name: "Evidence" }));
   expect(screen.getByText("FANUC 0i-Mate TF Programming Manual")).toBeInTheDocument();
   expect(screen.getByText("342 pages")).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "Category" })).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "Actions" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Exclude" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "configuration" }));
+  await user.click(screen.getByRole("button", { name: "Advanced Post Configuration" }));
+  await user.click(screen.getByRole("menuitem", { name: "Templates" }));
   expect(screen.getByRole("heading", { name: "Shared Output Templates" })).toBeInTheDocument();
   expect(screen.getByText("Program Structure")).toBeInTheDocument();
   expect(screen.getByText("Motion")).toBeInTheDocument();
@@ -225,7 +226,7 @@ test("mapping filters, acceptance, auto-advance, and source drawer preserve URL 
   const user = userEvent.setup();
   render(<MemoryRouter initialEntries={["/gpost/4?tab=mappings&queue=needs-review&mapping=loadtl"]}><Routes><Route path="/gpost/:draftId" element={<><GPostWorkspacePage /><LocationProbe /></>} /></Routes></MemoryRouter>);
   expect(await screen.findByText("Selected Mapping")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "LOADTL" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Tool Selection" })).toBeInTheDocument();
   expect(screen.getAllByText("Tool selection / load").length).toBeGreaterThan(0);
   expect(await screen.findByRole("heading", { name: "Historical Translation Evidence" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "AI-Assisted Interpretation" })).toBeInTheDocument();
@@ -246,31 +247,25 @@ test("mapping filters, acceptance, auto-advance, and source drawer preserve URL 
   expect(toast.closest(".gpost-header-actions")).toBeNull();
   expect(screen.getByRole("button", { name: "Dismiss notification" })).toBeInTheDocument();
   expect(api.updateGPostMapping).toHaveBeenCalledWith(5, expect.objectContaining({ review_status: "accepted" }));
-  await waitFor(() => expect(screen.getByRole("heading", { name: "SPINDL" })).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Spindle — Clockwise Start" })).toBeInTheDocument());
   expect(screen.getByLabelText("location")).toHaveTextContent("mapping=spindl");
 });
 
-test("Test tab generates a line-numbered preview, CL trace, validation, warnings, and reference diff", async () => {
+test("Generate preserves its preview across distinct Results and Toolpath routes", async () => {
   const user = userEvent.setup();
-  render(<MemoryRouter initialEntries={["/gpost/4?tab=test"]}><Routes><Route path="/gpost/:draftId" element={<GPostWorkspacePage />} /></Routes></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/gpost/4"]}><Routes><Route path="/gpost/:draftId/*" element={<GPostWorkspacePage />} /></Routes></MemoryRouter>);
   expect(await screen.findByRole("heading", { level: 2, name: "Test G-POST Draft" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Preflight" })).toBeInTheDocument();
-  expect(screen.getByText("Fanuc Lathe")).toBeInTheDocument();
+  expect(screen.getAllByText("Fanuc Lathe").length).toBeGreaterThan(0);
   expect(screen.getByLabelText("Upload CL File")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Generate Preview" }));
   expect(await screen.findByLabelText("Generated Code")).toBeInTheDocument();
   expect(screen.getByRole("heading", { level: 3, name: "Generated Code" })).toBeInTheDocument();
   expect(screen.getAllByText("T0101").length).toBeGreaterThan(0);
-  await user.click(screen.getByRole("button", { name: "cl trace" }));
-  expect(screen.getByRole("columnheader", { name: "CL Line" })).toBeInTheDocument();
-  expect(screen.getByText("Trace rationale")).toBeInTheDocument();
-  await user.click(screen.getAllByRole("button", { name: "validation" })[1]);
-  expect(screen.getByText("Supported Commands")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "warnings" }));
-  expect(screen.getByText("2-axis machine")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "reference diff" }));
-  expect(screen.getByText("Approved KLS turning example")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "toolpath" }));
+  await user.click(screen.getByRole("link", { name: "Results" }));
+  expect(screen.getByRole("heading", { name: "Generation Blocked" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Test G-POST Draft" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("link", { name: "Toolpath" }));
   expect(await screen.findByText("TOOLPATH VISUALIZATION ONLY")).toBeInTheDocument();
   expect(api.getGPostPreviewToolpath).toHaveBeenCalledWith(9);
 });
@@ -285,4 +280,15 @@ test("version workspace exposes history and technical comparison", async () => {
   await user.selectOptions(screen.getByLabelText("Compare version"), "10");
   await user.click(screen.getByRole("button", { name: "Compare" }));
   expect(await screen.findByText("loadtl")).toBeInTheDocument();
+});
+
+test.each([
+  ["/gpost/4/toolpath", "No generated toolpath yet", "Toolpath"],
+  ["/gpost/4/results", "No R&D result yet", "Results"],
+  ["/gpost/4/evidence", "Machine Profile", "Evidence"],
+])("direct G-POST route %s renders its distinct workspace", async (path, expected, activeLabel) => {
+  render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/gpost/:draftId/*" element={<GPostWorkspacePage />} /></Routes></MemoryRouter>);
+  expect(await screen.findByText(expected)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: activeLabel })).toHaveAttribute("aria-current", "page");
+  if (activeLabel !== "Generate") expect(screen.queryByRole("heading", { name: "Test G-POST Draft" })).not.toBeInTheDocument();
 });

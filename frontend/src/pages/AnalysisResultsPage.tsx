@@ -122,15 +122,15 @@ export function AnalysisResultsPage() {
   return (
     <section className={`page results-page ${activeTab === "toolpath" ? "toolpath-active" : ""}`}>
       <PageHeader
-        eyebrow={`Analysis #${project.id}`}
+        eyebrow="G-code Review"
         title={project.name}
         description={`${machine?.name ?? "Machine profile unavailable"} · ${statusLabel} · Reviewed ${new Date(project.updated_at).toLocaleString()}`}
-        action={<div className="header-actions"><Link className="button secondary" to={`/analyses/${project.id}/traceability`}>Open traceability</Link><Link className="button secondary" to="/analysis/new">New analysis</Link></div>}
+        action={<div className="header-actions"><details><summary>Technical Details</summary><Link to={`/analyses/${project.id}/traceability`}>Open traceability</Link></details><Link className="button secondary" to="/g-code-review">New review</Link></div>}
       />
       <SafetyBanner />
       <nav className="translation-tabs" aria-label="Analysis views"><button className={activeTab === "review" ? "active" : ""} onClick={() => setActiveTab("review")}>Review</button><button className={activeTab === "toolpath" ? "active" : ""} onClick={openToolpath}>Toolpath</button></nav>
       {activeTab === "toolpath" && <section className="analysis-toolpath panel"><header><h2>Visual Toolpath Review</h2><p>Parsed programmed motion with deterministic finding traceability.</p></header>{toolpath ? <ToolpathViewer data={toolpath} selectedSegmentId={selectedSegmentId} selectedFindingId={selectedFindingId} onSegmentSelect={selectToolpathSegment} /> : <p>Loading programmed motion…</p>}</section>}
-      <div className="result-metrics">
+      <h2>Review Summary</h2><div className="result-metrics">
         <div className="overall-card"><small>Overall review status</small><strong>{statusLabel}</strong><span className={project.status === "blocked" ? "indicator red" : project.status === "review_required" ? "indicator amber" : "indicator green"} /></div>
         {severities.map((severity) => <div className={`metric metric-${severity}`} key={severity}><span>{counts[severity]}</span><div><strong>{severity}</strong><small>findings</small></div></div>)}
       </div>
@@ -147,9 +147,10 @@ export function AnalysisResultsPage() {
         <div><strong>Manual-Based Explanation</strong><p>{selectedFinding ? `Retrieve documentation for: ${selectedFinding.title}` : "Select a deterministic finding, then retrieve relevant machine documentation."}</p></div>
         <Link
           className="button secondary"
+          aria-label="Explain using machine manuals"
           aria-disabled={!selectedFinding}
           to={selectedFinding ? `/manual-assistant?machine=${project.machine_profile_id}&question=${encodeURIComponent(`What do the uploaded manuals state about ${selectedFinding.rule_id} and this line: ${selectedFinding.source_line ?? ""}?`)}` : "#"}
-        >Explain using machine manuals →</Link>
+        >Ask Machine Assistant →</Link>
       </div>
       <section className="panel organizational-comparison-launcher">
         <div><span className="eyebrow">Separate evidence layer</span>

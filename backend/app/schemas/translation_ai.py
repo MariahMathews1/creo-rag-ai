@@ -73,11 +73,12 @@ class AIConsentRequest(BaseModel):
     allowed: bool
     reviewer_label: str = Field(min_length=1, max_length=120)
     acknowledgement: bool
+    note: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
-    def acknowledge_enable(self):
-        if self.allowed and not self.acknowledgement:
-            raise ValueError("Explicit acknowledgement is required to enable external AI processing")
+    def acknowledge_change(self):
+        if not self.acknowledgement:
+            raise ValueError("Explicit acknowledgement is required to change AI-processing permission")
         return self
 
 

@@ -37,7 +37,7 @@ export function ProfileExtractionSetupPage() {
     finally { setBusy(false); }
   }
   return <section className="page">
-    <PageHeader eyebrow="Citation-backed draft" title="Extract machine profile" description={`${machine?.name ?? "Machine"} · choose controlled documents and field categories`} />
+    <PageHeader eyebrow="Machine information" title="Extract Machine Information" description={`${machine?.name ?? "Machine"} · choose the machine documents to review`} />
     <aside className="safety-banner" role="alert"><span className="safety-icon">!</span><div><strong>Draft proposals only</strong><p>Extracted values require review against the exact machine, controller version, installed options, and controlled documentation.</p></div></aside>
     {error && <p role="alert" className="form-error">{error}</p>}
     <div className="extraction-setup-grid">

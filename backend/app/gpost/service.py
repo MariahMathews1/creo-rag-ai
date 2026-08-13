@@ -220,11 +220,68 @@ def setup_issues(db: Session, draft: GPostDraft, mappings: list[GPostMapping]) -
         issues.append({"code": "GPOST_TEMPLATE_FAMILY_MISMATCH", "message": "Machine type and controller template family conflict."})
     if not draft.templates_json or not draft.templates_json.get("safe_start"):
         issues.append({"code": "GPOST_BASE_TEMPLATE_MISSING", "message": "Base configuration template is not loaded."})
-    if not draft.selected_document_ids_json and not draft.manual_configuration_acknowledged:
-        issues.append({"code": "GPOST_SOURCE_ACKNOWLEDGEMENT_REQUIRED", "message": "Select a relevant source document or acknowledge manual configuration."})
-    if any(item.required_for_v1 and item.support_status == "unsupported_required" for item in mappings):
-        issues.append({"code": "GPOST_UNSUPPORTED_REQUIRED_MAPPING", "message": "One or more required V1 mappings are unsupported."})
     return issues
+
+
+def mapping_key_for_record(record: ParsedCLRecord) -> str:
+    command = record.original_command or record.command
+    if command == "SPINDL":
+        direction = next((value for value in record.parameters if value in {"CLW", "CCLW", "OFF"}), "CLW")
+        return {"CLW": "spindl_cw", "CCLW": "spindl_ccw", "OFF": "spindl_off"}[direction]
+    if command == "COOLNT":
+        mode = (record.parameters[0] if record.parameters else "ON").upper()
+        return "coolnt_off" if mode == "OFF" else "coolnt_on"
+    return command.lower()
+
+
+def current_cl_preflight(db: Session, draft: GPostDraft, cl_source: str) -> dict:
+    """Derive generation readiness only from behavior used by the submitted CL."""
+    mapping_rows = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == draft.id)))
+    mappings = {mapping.mapping_key: mapping for mapping in mapping_rows}
+    parsed = CLParser().parse(cl_source)
+    ignored = {"COMMENT", "PARTNO", "MACHIN", "UNITS", "CUTTER", "SEQNO"}
+    required_keys: list[str] = []
+    for record in parsed.records:
+        if (record.original_command or record.command) in ignored:
+            continue
+        key = mapping_key_for_record(record)
+        if key not in required_keys:
+            required_keys.append(key)
+    required = [mappings[key] for key in required_keys if key in mappings]
+    missing = [key for key in required_keys if key not in mappings]
+    supported = [item.mapping_key for item in required if item.support_status == "supported" and (effective_template(draft, item) is not None or item.mapping_key in {"rapid", "from"})]
+    reviewed = [item.mapping_key for item in required if item.mapping_key in supported and item.review_status in {"accepted", "accepted_with_edit"}]
+    unsupported = [item.mapping_key for item in required if item.mapping_key not in supported]
+    blockers = setup_issues(db, draft, mapping_rows)
+    if parsed.error_count:
+        blockers.append({"code": "GPOST_CL_PARSE_ERROR", "title": "CL Input Needs Review", "message": f"{parsed.error_count} CL record(s) contain parser diagnostics.", "action": "review_cl"})
+    if missing or unsupported:
+        labels = missing + unsupported
+        blockers.append({"code": "GPOST_UNSUPPORTED_CURRENT_CL", "title": "Unsupported CL Behavior", "message": f"No usable post behavior is configured for: {', '.join(labels)}.", "behavior_keys": labels, "action": "configure_mapping"})
+    for issue in blockers:
+        issue.setdefault("title", "Post Configuration Needs Attention")
+        issue.setdefault("action", "change_template" if "MISMATCH" in issue["code"] else "open_configuration")
+    unreviewed = [key for key in supported if key not in reviewed]
+    warnings = []
+    if unreviewed:
+        warnings.append({"code": "GPOST_UNREVIEWED_CURRENT_CL", "message": f"{len(unreviewed)} supported behavior(s) have not been manually reviewed.", "behavior_keys": unreviewed})
+    if not draft.selected_document_ids_json:
+        warnings.append({"code": "GPOST_NO_DOCUMENT_EVIDENCE", "message": "No machine document is selected as supporting evidence."})
+    return {
+        "machine_ready": not any(item["code"].startswith("GPOST_PROFILE") or item["code"].startswith("GPOST_MACHINE") for item in blockers),
+        "post_context_ready": not any("MISMATCH" in item["code"] or item["code"] == "GPOST_BASE_TEMPLATE_MISSING" for item in blockers),
+        "cl_parse_status": "parsed" if not parsed.error_count else "needs_review",
+        "cl_record_count": len(parsed.records),
+        "required_behavior_keys": required_keys,
+        "supported_behavior_keys": supported,
+        "reviewed_behavior_keys": reviewed,
+        "unreviewed_behavior_keys": unreviewed,
+        "unsupported_required_behaviors": missing + unsupported,
+        "blocking_issues": blockers,
+        "warnings": warnings,
+        "generation_allowed": not blockers,
+        "generation_allowed_with_warning": not blockers and bool(warnings),
+    }
 
 
 def validate_ownership(db: Session, machine_id: int, revision_id: int, document_ids: list[int], standard_id: int | None, reference_ids: list[int]):
@@ -324,13 +381,7 @@ def generate_preview(db: Session, draft: GPostDraft, cl_source: str) -> GPostPre
         command = record.original_command or record.command
         if command in {"COMMENT", "PARTNO", "MACHIN", "UNITS", "CUTTER", "SEQNO"}:
             continue
-        variant = command.lower()
-        if command == "SPINDL":
-            direction = next((v for v in record.parameters if v in {"CLW", "CCLW", "OFF"}), "CLW")
-            variant = {"CLW": "spindl_cw", "CCLW": "spindl_ccw", "OFF": "spindl_off"}[direction]
-        elif command == "COOLNT":
-            mode = (record.parameters[0] if record.parameters else "ON").upper()
-            variant = "coolnt_off" if mode == "OFF" else "coolnt_on"
+        variant = mapping_key_for_record(record)
         mapping = mappings.get(variant)
         if mapping is None:
             item = {"line": record.line_number, "command": command, "reason": "No mapping exists"}

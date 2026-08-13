@@ -27,14 +27,19 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="machines" element={<MachineProfilesPage />} />
           <Route path="analysis/new" element={<NewAnalysisPage />} />
+          <Route path="g-code-review" element={<NewAnalysisPage />} />
           <Route path="analysis/:projectId" element={<AnalysisResultsPage />} />
           <Route path="analyses/:analysisId/traceability" element={<TraceabilityPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="documents/:documentId" element={<DocumentViewerPage />} />
           <Route path="manual-assistant" element={<ManualAssistantPage />} />
+          <Route path="machine-assistant" element={<ManualAssistantPage />} />
           <Route path="gpost" element={<GPostGeneratorPage />} />
-          <Route path="gpost/:draftId" element={<GPostWorkspacePage />} />
+          <Route path="gpost/:draftId/*" element={<GPostWorkspacePage />} />
           <Route path="translations" element={<TranslationExamplesPage />} />
+          <Route path="translations/patterns" element={<TranslationExamplesPage />} />
+          <Route path="translations/ai-experiment" element={<TranslationExamplesPage />} />
+          <Route path="translations/technical" element={<TranslationExamplesPage />} />
           <Route path="translations/:exampleId" element={<TranslationDetailPage />} />
           <Route path="machines/:machineId/profile-extraction/new" element={<ProfileExtractionSetupPage />} />
           <Route path="machines/:machineId/profile-extraction/:runId" element={<ProfileExtractionReviewPage />} />

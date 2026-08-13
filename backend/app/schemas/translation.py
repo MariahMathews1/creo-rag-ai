@@ -57,7 +57,6 @@ class TranslationUpdate(BaseModel):
     source_provenance: str | None = None
     verification_basis: str | None = None
     verification_note: str | None = None
-    ai_processing_allowed: bool | None = None
 
 
 class StatusRequest(BaseModel):

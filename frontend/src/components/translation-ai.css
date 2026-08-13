@@ -18,7 +18,9 @@
 .ai-explanation dd a { margin-right: 8px; }
 .translation-ai-consent { display: grid; gap: 12px; }
 .translation-ai-consent > header, .translation-ai-consent > footer { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
-.translation-detail-page:not(.tab-overview) > .translation-ai-consent { display: none; }
+.translation-ai-consent > label:not(.checkbox-label) { max-width: 420px; }
+.translation-ai-consent .success-message { margin: 0; color: #23623a; font-weight: 700; }
+.translation-detail-page:not(.tab-technical-provenance) > .translation-ai-consent { display: none; }
 .translation-ai-panel.compact .ai-retrieval-form { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 @media (max-width: 900px) { .translation-ai-panel > header { display: grid; } .ai-retrieval-form { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 620px) { .ai-retrieval-form, .translation-ai-panel.compact .ai-retrieval-form, .ai-explanation dl { grid-template-columns: 1fr; } .ai-provider-status { grid-template-columns: 1fr; } }

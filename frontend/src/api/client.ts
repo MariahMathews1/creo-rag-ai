@@ -65,7 +65,7 @@ export const api = {
   retrieveTranslationExamples: (payload: TranslationRetrievalRequest) => request<TranslationRetrievalResponse>("/ai/translation/retrieve", { method: "POST", body: JSON.stringify(payload) }),
   explainTranslation: (retrieval: TranslationRetrievalRequest, exampleIds: number[]) => request<TranslationExplanationResponse>("/ai/translation/explain", { method: "POST", body: JSON.stringify({ retrieval, example_ids: exampleIds }) }),
   listTranslationAIInvocations: (machineId?: number) => request<TranslationAIInvocation[]>(`/ai/translation/invocations${machineId ? `?machine_profile_id=${machineId}` : ""}`),
-  setTranslationAIConsent: (exampleId: number, allowed: boolean, reviewerLabel: string, acknowledgement: boolean) => request<TranslationExample>(`/translations/${exampleId}/ai-processing-consent`, { method: "POST", body: JSON.stringify({ allowed, reviewer_label: reviewerLabel, acknowledgement }) }),
+  setTranslationAIConsent: (exampleId: number, allowed: boolean, reviewerLabel: string, acknowledgement: boolean, note?: string) => request<TranslationExample>(`/translations/${exampleId}/ai-processing-consent`, { method: "POST", body: JSON.stringify({ allowed, reviewer_label: reviewerLabel, acknowledgement, note: note || null }) }),
   listProfiles: () => request<MachineProfile[]>("/machines"),
   createProfile: (profile: MachineProfileInput) =>
     request<MachineProfile>("/machines", {
@@ -413,6 +413,10 @@ export const api = {
   addGPostEvidence: (mappingId: number, payload: Record<string, unknown>) =>
     request(`/gpost-mappings/${mappingId}/evidence`, {
       method: "POST", body: JSON.stringify(payload),
+    }),
+  preflightGPost: (draftId: number, clSource: string) =>
+    request<import("../types").GPostPreflight>(`/gpost-drafts/${draftId}/preflight`, {
+      method: "POST", body: JSON.stringify({ cl_source: clSource }),
     }),
   previewGPost: (draftId: number, clSource: string) =>
     request<GPostPreview>(`/gpost-drafts/${draftId}/preview`, {

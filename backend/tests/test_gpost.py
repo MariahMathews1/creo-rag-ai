@@ -117,6 +117,28 @@ def test_multiaxis_and_family_mismatch_block_preview_without_disappearing(client
     assert any(item["code"] == "GPOST_TEMPLATE_FAMILY_MISMATCH" for item in blocked["warnings_json"])
 
 
+def test_current_cl_preflight_ignores_irrelevant_mappings_and_warns_for_unreviewed(client, db_session, machine_profile):
+    draft = create_draft(client, db_session, machine_profile).json()
+    mappings = client.get(f"/api/gpost-drafts/{draft['id']}/mappings").json()
+    unrelated = next(item for item in mappings if item["mapping_key"] == "multax")
+    assert unrelated["support_status"] != "supported"
+    result = client.post(f"/api/gpost-drafts/{draft['id']}/preflight", json={"cl_source": "SPINDL/RPM,1200,CLW\nFINI"}).json()
+    assert result["generation_allowed"] is True
+    assert result["required_behavior_keys"] == ["spindl_cw", "fini"]
+    assert "multax" not in result["unsupported_required_behaviors"]
+    assert set(result["unreviewed_behavior_keys"]) == {"spindl_cw", "fini"}
+    assert result["generation_allowed_with_warning"] is True
+
+
+def test_current_cl_preflight_blocks_only_unsupported_current_behavior(client, db_session, machine_profile):
+    draft = create_draft(client, db_session, machine_profile).json()
+    result = client.post(f"/api/gpost-drafts/{draft['id']}/preflight", json={"cl_source": "CYCLE/THREAD\nFINI"}).json()
+    assert result["generation_allowed"] is False
+    assert "cycle" in result["unsupported_required_behaviors"]
+    blocker = next(item for item in result["blocking_issues"] if item["code"] == "GPOST_UNSUPPORTED_CURRENT_CL")
+    assert blocker["action"] == "configure_mapping"
+
+
 def test_versioning_compare_exports_and_audit_events(client, db_session, machine_profile):
     first = create_draft(client, db_session, machine_profile).json()
     second = client.post(f"/api/gpost-drafts/{first['id']}/versions").json()
@@ -174,7 +196,7 @@ def test_profile_machine_type_snapshot_mismatch_and_missing_source_block_preflig
     codes = {item.get("code") for item in preview["warnings_json"]}
     assert "GPOST_MACHINE_TYPE_SNAPSHOT_MISMATCH" in codes
     assert "GPOST_CONTROLLER_FAMILY_MISMATCH" in codes
-    assert "GPOST_SOURCE_ACKNOWLEDGEMENT_REQUIRED" in codes
+    assert "GPOST_SOURCE_ACKNOWLEDGEMENT_REQUIRED" not in codes
 
 
 def test_draft_creation_requires_approved_profile_revision(client, db_session, machine_profile):

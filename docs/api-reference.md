@@ -45,6 +45,6 @@ Responses contain normalized segments, raw programmed-coordinate context, bounds
 - `POST /api/ai/translation/retrieve` — database-only verified-example retrieval; never invokes AI
 - `POST /api/ai/translation/explain` — explicit advisory structured interpretation using selected eligible examples
 - `GET /api/ai/translation/invocations` and `GET /api/ai/translation/invocations/{id}` — content-minimized audit metadata
-- `POST /api/translations/{id}/ai-processing-consent` — individual explicit consent control
+- `POST /api/translations/{id}/ai-processing-consent` — individual explicit consent control; requires a reviewer label and acknowledgement, allows enable only for `verified_successful` examples, and emits `translation_ai_consent_enabled` or `translation_ai_consent_disabled`
 
 Public-web retrieval, full-program AI G-code generation, automatic mapping changes, document transmission, and fine-tuning are not enabled.

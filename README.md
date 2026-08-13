@@ -1,5 +1,11 @@
 # Creo NC Post Assistant
 
+The V1 interface follows the NC programmer workflow: Machines, Documents, verified Translation Examples, G-POST R&D generation, and machine-specific document assistance. Engineering internals remain available through progressive disclosure.
+
+Start with [the V1 product workflow](docs/v1-product-workflow.md), [screen map](docs/v1-screen-map.md), and [manual test checklist](docs/v1-manual-test-checklist.md).
+
+Status meaning and current-input generation gates are documented in [V1 status semantics](docs/v1-status-semantics.md) and [G-POST preflight](docs/v1-gpost-preflight.md).
+
 > Developer handoff, maintenance guide, debugging walkthrough, and reconstruction specification
 
 Creo NC Post Assistant is a local-first internal proof of concept for reviewing
@@ -63,8 +69,8 @@ Azure OpenAI now has a controlled, optional explanation-only provider boundary. 
 At the time of this handoff:
 
 ```text
-Backend: 104 tests passing
-Frontend: 52 tests passing
+Backend: 105 tests passing
+Frontend: 53 tests passing
 Frontend TypeScript check: passing
 Frontend production build: passing
 Database migration head: 20260814_01
