@@ -35,6 +35,7 @@ class GPostDraft(Base):
 
     mappings: Mapped[list["GPostMapping"]] = relationship(back_populates="draft", cascade="all, delete-orphan")
     preview_runs: Mapped[list["GPostPreviewRun"]] = relationship(back_populates="draft", cascade="all, delete-orphan")
+    section_drafts: Mapped[list["PostSectionDraft"]] = relationship(back_populates="draft", cascade="all, delete-orphan")
 
 
 class GPostDraftVersion(Base):
@@ -134,3 +135,57 @@ class GPostPreviewRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     draft: Mapped[GPostDraft] = relationship(back_populates="preview_runs")
+
+
+class PostSectionDraft(Base):
+    __tablename__ = "post_section_drafts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    gpost_draft_id: Mapped[int] = mapped_column(ForeignKey("gpost_drafts.id"), index=True)
+    section_key: Mapped[str] = mapped_column(String(40), index=True)
+    section_version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(40), default="needs_review", index=True)
+    source_type: Mapped[str] = mapped_column(String(40), default="post_builder_ai")
+    machine_context_snapshot_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    draft_templates_json: Mapped[list] = mapped_column(JSON, default=list)
+    missing_information_json: Mapped[list] = mapped_column(JSON, default=list)
+    assumptions_json: Mapped[list] = mapped_column(JSON, default=list)
+    warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+    source_evidence_json: Mapped[list] = mapped_column(JSON, default=list)
+    ai_generated: Mapped[bool] = mapped_column(Boolean, default=True)
+    provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    response_schema_version: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+    draft: Mapped[GPostDraft] = relationship(back_populates="section_drafts")
+    rules: Mapped[list["PostRuleDraft"]] = relationship(back_populates="section_draft", cascade="all, delete-orphan")
+
+
+class PostRuleDraft(Base):
+    __tablename__ = "post_rule_drafts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_section_draft_id: Mapped[int] = mapped_column(ForeignKey("post_section_drafts.id"), index=True)
+    rule_key: Mapped[str] = mapped_column(String(100), index=True)
+    name: Mapped[str] = mapped_column(String(180))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    condition: Mapped[str] = mapped_column(Text)
+    output_behavior: Mapped[str] = mapped_column(Text)
+    ai_draft_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    engineer_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    required_machine_facts_json: Mapped[list] = mapped_column(JSON, default=list)
+    evidence_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    assumptions_json: Mapped[list] = mapped_column(JSON, default=list)
+    warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(40), default="needs_review", index=True)
+    review_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewer_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+    section_draft: Mapped[PostSectionDraft] = relationship(back_populates="rules")

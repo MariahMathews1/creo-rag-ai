@@ -13,6 +13,7 @@ vi.mock("../api/client", () => ({ api: {
   listGPostMappings: vi.fn(), createGPostDraft: vi.fn(), getGPostDraft: vi.fn(),
   updateGPostDraft: vi.fn(), updateGPostMapping: vi.fn(), preflightGPost: vi.fn(), previewGPost: vi.fn(),
   createGPostVersion: vi.fn(), compareGPostVersions: vi.fn(), archiveGPostDraft: vi.fn(),
+  getAssembledPost: vi.fn(), duplicateGPostDraft: vi.fn(), deleteGPostDraft: vi.fn(),
   getGPostHistoricalTranslationEvidence: vi.fn(),
   getGPostPreviewToolpath: vi.fn(),
   getTranslationAIProviderStatus: vi.fn(), retrieveTranslationExamples: vi.fn(), explainTranslation: vi.fn(),
@@ -50,7 +51,7 @@ const document = {
   document_type: "controller_manual", original_filename: "manual.pdf",
   mime_type: "application/pdf", file_size_bytes: 1, file_hash: "a",
   processing_status: "ready", processing_error: null, page_count: 342,
-  uploaded_at: "2026-08-01", processed_at: "2026-08-01",
+  uploaded_at: "2026-08-01", processed_at: "2026-08-01", ai_post_builder_allowed: true,
 };
 const reference = {
   id: 7, machine_profile_id: 1, machine_profile_revision_id: 2,
@@ -153,49 +154,69 @@ beforeEach(() => {
   vi.mocked(api.preflightGPost).mockResolvedValue({ machine_ready: true, post_context_ready: true, cl_parse_status: "parsed", cl_record_count: 10, required_behavior_keys: ["loadtl", "spindl_cw", "fedrat", "coolnt_on", "rapid", "goto", "coolnt_off", "spindl_off", "fini"], supported_behavior_keys: ["loadtl", "spindl_cw", "fedrat", "coolnt_on", "rapid", "goto", "coolnt_off", "spindl_off", "fini"], reviewed_behavior_keys: ["loadtl"], unreviewed_behavior_keys: ["spindl_cw"], unsupported_required_behaviors: [], blocking_issues: [], warnings: [{ code: "GPOST_UNREVIEWED_CURRENT_CL", message: "1 supported behavior has not been manually reviewed." }], generation_allowed: true, generation_allowed_with_warning: true } as never);
   vi.mocked(api.getDocumentContent).mockResolvedValue({ document, pages: [{ page_number: 84, text: "T codes select a turret station.", character_count: 32 }], extracted_text: "T codes select a turret station.", chunks: [] } as never);
   vi.mocked(api.createGPostDraft).mockResolvedValue(draft as never);
+  vi.mocked(api.getAssembledPost).mockResolvedValue({ draft_id: 4, name: draft.name, status: "building", required_area_count: 8, counts: { reviewed: 0, needs_review: 1, needs_information: 0, not_started: 7, deferred: 1 }, components: [], ready_for_complete_review: false, advisory_only: true, native_gpost_export: "not_configured" } as never);
+  vi.mocked(api.duplicateGPostDraft).mockResolvedValue({ ...draft, id: 12, name: `${draft.name} Copy`, version: 1 } as never);
+  vi.mocked(api.deleteGPostDraft).mockResolvedValue(undefined);
+  vi.mocked(api.archiveGPostDraft).mockResolvedValue({ ...draft, status: "archived" } as never);
   vi.mocked(api.getGPostHistoricalTranslationEvidence).mockResolvedValue({ mapping_id: 5, machine_profile_id: 1, cl_command: "LOADTL", verified_example_count: 2, observations: [], read_only: true, mapping_changed: false } as never);
   vi.mocked(api.getGPostPreviewToolpath).mockResolvedValue({ source: "both", machine_type: "lathe", default_view: "XZ", coordinate_context: "work", bounds: { min_x: 0, max_x: 1, min_y: 0, max_y: 0, min_z: 0, max_z: 1 }, summary: { segments: 1, rapid: 0, feed: 1, arcs: 0, tools: 1, operations: 0, unresolved_geometry: 0, visualization_simplified: false }, warnings: [], comparison_summary: null, advisory_only: true, safety_notice: "TOOLPATH VISUALIZATION ONLY", segments: [{ id: "gcode-1", source_type: "gcode", source_record_id: 1, source_line_start: 3, source_line_end: 3, operation_id: null, tool_number: 1, motion_type: "linear", start_point: { x: 0, y: 0, z: 0 }, end_point: { x: 1, y: 0, z: 1 }, center_point: null, radius: null, path_points: [], plane: "G18", feed_rate: null, spindle_speed: 1200, rapid: false, arc_direction: null, helical: false, tool_axis: null, alignment_link_id: null, aligned_segment_ids: [], finding_ids: [], sequence_index: 0, visualizable: true, unmatched: false, geometry_status: null, metadata_json: {} }] } as never);
   vi.mocked(api.getTranslationAIProviderStatus).mockResolvedValue({ provider: "mock", configured: true, reachable: true, authentication_mode: "none", deployment: "fixture", model: "mock", external_processing: false, public_web: false, data_source: "Verified Internal Translation Examples Only", mode: "R&D", error_code: null });
 });
 
-test("primary navigation uses the G-POST Generator identity", () => {
+test("primary navigation uses the Post Builder identity", () => {
   render(<MemoryRouter><Routes><Route element={<Layout />}><Route index element={<div>Home</div>} /></Route></Routes></MemoryRouter>);
-  expect(screen.getByRole("link", { name: /G-POST Generator/ })).toHaveAttribute("href", "/gpost");
+  expect(screen.getByRole("link", { name: /Post Builder/ })).toHaveAttribute("href", "/gpost");
   expect(screen.queryByText("Post Processor Lab")).not.toBeInTheDocument();
 });
 
-test("landing page shows existing drafts instead of the CL test harness", async () => {
+test("landing page shows one-post management controls instead of the CL test harness", async () => {
   render(<MemoryRouter><GPostGeneratorPage /></MemoryRouter>);
   expect(await screen.findByText("KLS-1840N FANUC Post")).toBeInTheDocument();
-  expect(screen.getByRole("columnheader", { name: "Mappings" })).toBeInTheDocument();
-  expect(screen.getByText("Needs Configuration")).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Post filters" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Search")).toBeInTheDocument();
+  expect(screen.getByLabelText("Machine")).toBeInTheDocument();
+  expect(screen.getAllByText("Building")).toHaveLength(2);
   expect(screen.queryByLabelText("CL / NCL Input")).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Open/ })).toHaveAttribute("href", "/gpost/4");
+  expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/gpost/4");
+  expect(screen.getByRole("button", { name: `More actions for ${draft.name}` })).toBeInTheDocument();
 });
 
 test("landing page provides the specified empty state", async () => {
   vi.mocked(api.listGPostDrafts).mockResolvedValue([] as never);
   render(<MemoryRouter><GPostGeneratorPage /></MemoryRouter>);
-  expect(await screen.findByText("No G-POST configurations yet")).toBeInTheDocument();
-  expect(screen.getAllByRole("button", { name: /Create (G-POST|Draft)/ }).length).toBeGreaterThan(0);
-  expect(screen.getByRole("link", { name: "View Machine Profiles" })).toHaveAttribute("href", "/machines");
+  expect(await screen.findByText("No posts match these filters.")).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Create Post" }).length).toBeGreaterThan(0);
 });
 
-test("guided creation presents machine context, readiness, and draft identity", async () => {
+test("guided creation auto-selects a compatible foundation and omits reference programs", async () => {
   const user = userEvent.setup();
   render(<MemoryRouter initialEntries={["/gpost"]}><Routes><Route path="/gpost" element={<GPostGeneratorPage />} /><Route path="/gpost/:draftId" element={<div>Created workspace</div>} /></Routes></MemoryRouter>);
-  await user.click(await screen.findByRole("button", { name: /Create G-POST/ }));
+  await user.click(await screen.findByRole("button", { name: "Create Post" }));
   expect(await screen.findByText("Select Machine", { selector: "h1" })).toBeInTheDocument();
-  expect(screen.getByText("Profile coverage")).toBeInTheDocument();
+  expect(screen.getByText("Machine Knowledge")).toBeInTheDocument();
+  expect(screen.queryByText("Reference Programs")).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Select" }));
-  expect(screen.getByText("Confirm Post Context", { selector: "h1" })).toBeInTheDocument();
-  expect(screen.getByText("✓ 1 machine documents available")).toBeInTheDocument();
-  expect(screen.getByText("⚠ 1 machine information fields may need review")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Continue Setup" }));
-  expect(screen.getByDisplayValue("KLS-1840N 0i-Mate TF Post")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Create Draft" }));
+  expect(screen.getByText("Post Setup", { selector: "h1" })).toBeInTheDocument();
+  expect(screen.getByText("FANUC Lathe")).toBeInTheDocument();
+  expect(screen.getByText("1 attached")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  expect(screen.getByDisplayValue("FANUC Lathe")).toHaveAttribute("readonly");
+  expect(screen.getByText("Current", { selector: "dd" })).toBeInTheDocument();
+  expect(screen.queryByRole("combobox", { name: /Template Family/ })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Create Post" }));
   expect(await screen.findByText("Created workspace")).toBeInTheDocument();
-  expect(api.createGPostDraft).toHaveBeenCalledWith(1, expect.objectContaining({ machine_profile_revision_id: 2, controller_family: "fanuc_lathe", selected_document_ids: [3] }));
+  expect(api.createGPostDraft).toHaveBeenCalledWith(1, expect.objectContaining({ machine_profile_revision_id: 2, controller_family: "fanuc_lathe", selected_document_ids: [3], reference_program_ids: [] }));
+});
+
+test("post list search, filters, archive, rename, and delete are explicit", async () => {
+  const user = userEvent.setup(); render(<MemoryRouter><GPostGeneratorPage /></MemoryRouter>);
+  await screen.findByText(draft.name);
+  await user.type(screen.getByLabelText("Search"), "missing");
+  expect(screen.getByText("No posts match these filters.")).toBeInTheDocument();
+  await user.clear(screen.getByLabelText("Search")); await user.selectOptions(screen.getByLabelText("Machine"), "1"); await user.selectOptions(screen.getByLabelText("Sort"), "name");
+  await user.click(screen.getByRole("button", { name: `More actions for ${draft.name}` })); await user.click(screen.getByRole("menuitem", { name: "Rename" }));
+  const input = screen.getByLabelText("Post Name"); await user.clear(input); await user.type(input, "Renamed Post"); await user.click(screen.getByRole("button", { name: "Save Name" }));
+  await waitFor(() => expect(api.updateGPostDraft).toHaveBeenCalledWith(4, { name: "Renamed Post" }));
 });
 
 test("workspace overview, sources, and configuration progressively disclose context", async () => {
@@ -229,7 +250,7 @@ test("mapping filters, acceptance, auto-advance, and source drawer preserve URL 
   expect(screen.getByRole("heading", { name: "Tool Selection" })).toBeInTheDocument();
   expect(screen.getAllByText("Tool selection / load").length).toBeGreaterThan(0);
   expect(await screen.findByRole("heading", { name: "Historical Translation Evidence" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "AI-Assisted Interpretation" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Legacy translation-AI experiment disabled" })).toBeInTheDocument();
   expect(api.explainTranslation).not.toHaveBeenCalled();
   expect(screen.getByText("2 verified examples")).toBeInTheDocument();
   expect(screen.getByText("Evidence does not automatically change this mapping.")).toBeInTheDocument();

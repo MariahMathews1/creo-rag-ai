@@ -139,6 +139,7 @@ export interface SourceDocument {
   file_hash: string | null;
   processing_status: "uploaded" | "processing" | "ready" | "failed";
   processing_error: string | null;
+  ai_post_builder_allowed: boolean;
   page_count: number | null;
   uploaded_at: string;
   processed_at: string | null;
@@ -467,6 +468,59 @@ export interface GPostHistoricalTranslationEvidence {
   mapping_id: number; machine_profile_id: number; cl_command: string; verified_example_count: number;
   observations: Array<{ translation_example_id: number; name: string; post_revision: string | null; operation: string; cl_pattern: string; gcode_pattern: string }>;
   read_only: true; mapping_changed: false;
+}
+export interface PostBuilderProviderStatus {
+  provider: "disabled" | "mock" | "azure_openai"; configured: boolean; reachable: boolean | null;
+  authentication_mode: string | null; deployment: string | null; model: string | null;
+  external_processing: boolean; public_web: false; data_source: string; mode: "R&D Post Development";
+  cl_ncl_ai_access: "prohibited"; error_code: string | null;
+}
+export interface PostBuilderSectionResponse {
+  section_key: string; status: "draft" | "needs_machine_information";
+  draft_rules: Array<{ rule_key: string; name: string; condition: string; output_behavior: string; evidence_reference_ids: number[]; review_status: "draft" }>;
+  draft_templates: Array<Record<string, unknown>>; missing_information: string[]; assumptions: string[];
+  source_reference_ids: number[]; warnings: string[]; provider_metadata: Record<string, unknown>;
+  invocation_id: number; advisory_only: true; safety_notice: string;
+}
+export type PostSectionKey = "program_structure" | "tooling" | "spindle" | "coolant" | "feed" | "motion" | "coordinates" | "program_end" | "cycles";
+export type PostSectionReadinessStatus = "ready" | "ready_with_review" | "needs_information" | "blocked" | "deferred";
+export interface PostMachineFact { key: string; label: string; value: unknown; status: "known" | "needs_review" | "unknown" | "not_applicable"; critical: boolean; source: string; }
+export interface PostSectionReadiness {
+  section_key: PostSectionKey; label: string; readiness: PostSectionReadinessStatus;
+  manual_setup_readiness: PostSectionReadinessStatus; ai_drafting_readiness: PostSectionReadinessStatus;
+  known_machine_facts: PostMachineFact[]; missing_information: string[]; warnings: string[];
+  conflicts: Array<Record<string, unknown>>; evidence_count: number; reviewed_rule_count: number;
+  current_draft_status: string; draft_allowed: boolean;
+}
+export interface PostBuilderEvidence {
+  evidence_id: number; document_id: number; document_title: string; document_type: string;
+  page_start: number | null; page_end: number | null; section_title: string | null; excerpt: string;
+  relevance_score: number; matched_terms: string[]; ai_eligible: boolean; conflict_labels: string[];
+}
+export interface PostRuleDraft {
+  id: number; rule_key: string; name: string; description: string | null; condition: string; output_behavior: string;
+  ai_draft_template: string | null; engineer_template: string | null; required_machine_facts_json: string[];
+  evidence_ids_json: number[]; assumptions_json: string[]; warnings_json: string[]; status: string;
+  review_reason: string | null; reviewer_label: string | null; reviewed_at: string | null; created_at: string; updated_at: string;
+}
+export interface PostSectionDraft {
+  id: number; gpost_draft_id: number; section_key: PostSectionKey; section_version: number; status: string;
+  source_type: string; machine_context_snapshot_json: Record<string, unknown>; draft_templates_json: Array<Record<string, unknown>>;
+  missing_information_json: string[]; assumptions_json: string[]; warnings_json: string[];
+  source_evidence_json: PostBuilderEvidence[]; ai_generated: boolean; provider: string | null; model: string | null;
+  prompt_version: string | null; response_schema_version: string | null; reviewed_at: string | null;
+  created_at: string; updated_at: string; rules: PostRuleDraft[]; advisory_only: true;
+}
+export interface PostSectionCompare { left_version: number; right_version: number; rules_added: string[]; rules_removed: string[]; templates_changed: string[]; evidence_changed: boolean; assumptions_changed: boolean; }
+export interface AssembledPostComponent {
+  section_key: PostSectionKey; label: string; state: "reviewed" | "needs_review" | "needs_information" | "not_started" | "deferred";
+  required: boolean; section_version: number | null; rules: Array<{ rule_key: string; name: string; condition: string; template: string; status: string; evidence_ids: number[]; reviewer: string | null }>;
+  missing_information: string[]; evidence_count: number;
+}
+export interface AssembledPostDraft {
+  draft_id: number; name: string; status: "setup" | "building" | "needs_information" | "ready_for_review" | "reviewed_rnd_draft" | "archived";
+  required_area_count: number; counts: Record<string, number>; components: AssembledPostComponent[];
+  ready_for_complete_review: boolean; advisory_only: true; native_gpost_export: "not_configured";
 }
 export interface ToolpathPoint { x: number | null; y: number | null; z: number | null; a?: number | null; b?: number | null; c?: number | null; }
 export interface ToolpathSegment {

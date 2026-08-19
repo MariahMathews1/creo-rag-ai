@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.config import Settings, get_settings
+from app.ai.governance import prohibit_translation_ai
 from app.translation_ai.prompt import PromptPackage
 
 
@@ -47,7 +48,7 @@ class DisabledTranslationProvider(TranslationAIProvider):
         return {"configured": False, "reachable": False, "authentication_mode": None, "deployment": None, "model": None}
 
     def explain_translation(self, prompt: PromptPackage, input_cl: str) -> ProviderResult:
-        raise TranslationAIError("AI_PROVIDER_DISABLED", "Translation AI provider is disabled.")
+        prohibit_translation_ai()
 
 
 class MockTranslationProvider(TranslationAIProvider):
@@ -58,18 +59,7 @@ class MockTranslationProvider(TranslationAIProvider):
         return {"configured": True, "reachable": True, "authentication_mode": "none", "deployment": "local-deterministic-fixture", "model": "mock-translation-v1"}
 
     def explain_translation(self, prompt: PromptPackage, input_cl: str) -> ProviderResult:
-        upper = input_cl.upper()
-        spindle = "SPINDL" in upper and "CLW" in upper
-        return ProviderResult(payload={
-            "status": "advisory_interpretation",
-            "input_cl": input_cl,
-            "interpreted_operation": "clockwise_spindle_start" if spindle else "translation_mapping_review",
-            "suggested_mapping_pattern": "S{rpm} M03" if spindle else None,
-            "short_rationale": "The selected verified examples show the observed site pattern; deterministic review remains authoritative.",
-            "example_ids": prompt.example_ids,
-            "uncertainties": ["Low for the synthetic spindle example."] if spindle else ["The mock provider does not infer unsupported mappings."],
-            "unsupported_features": [], "warnings": ["Mock response; no external AI call was made."],
-        }, provider_metadata={"provider": self.name, "deployment": "local-deterministic-fixture", "model": "mock-translation-v1"})
+        prohibit_translation_ai()
 
 
 class AzureOpenAITranslationProvider(TranslationAIProvider):
@@ -122,6 +112,7 @@ class AzureOpenAITranslationProvider(TranslationAIProvider):
             return {"configured": configured, "reachable": False, "authentication_mode": self.settings.azure_openai_auth_mode, "deployment": self.settings.azure_openai_deployment or None, "model": self.settings.azure_openai_model or None, "error_code": exc.code}
 
     def explain_translation(self, prompt: PromptPackage, input_cl: str) -> ProviderResult:
+        prohibit_translation_ai()
         schema = {
             "type": "object", "additionalProperties": False,
             "required": ["status", "input_cl", "interpreted_operation", "suggested_mapping_pattern", "short_rationale", "example_ids", "uncertainties", "unsupported_features", "warnings"],

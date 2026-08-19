@@ -15,6 +15,7 @@ from app.translation_ai.policy import AIProcessingPolicy
 from app.translation_ai.prompt import TRANSLATION_AI_RESPONSE_SCHEMA_VERSION, TRANSLATION_EXPLANATION_PROMPT_VERSION, TranslationPromptBuilder
 from app.translation_ai.provider import TranslationAIError, get_translation_provider
 from app.translation_ai.retrieval import TranslationRetrievalService
+from app.ai.governance import AIGovernanceViolation, prohibit_translation_ai
 
 router = APIRouter(prefix="/ai/translation", tags=["Translation AI"])
 
@@ -42,15 +43,20 @@ def provider_status(check_reachability: bool = Query(default=False), db: Session
     return ProviderStatus(provider=provider.name, external_processing=provider.external_processing, public_web=False, **status)
 
 
-@router.post("/retrieve", response_model=TranslationRetrievalResponse)
+@router.post("/retrieve", response_model=TranslationRetrievalResponse, deprecated=True)
 def retrieve_examples(payload: TranslationRetrievalRequest, db: Session = Depends(get_db)):
     result = TranslationRetrievalService(db).retrieve(payload)
     audit(db, "translation_retrieval_run", payload.machine_profile_id, scope=result.retrieval_scope, example_ids=[item.example_id for item in result.examples], eligible_count=result.eligible_count, ai_called=False); db.commit()
     return result
 
 
-@router.post("/explain", response_model=TranslationExplanationResponse)
+@router.post("/explain", response_model=TranslationExplanationResponse, deprecated=True)
 def explain_translation(payload: TranslationExplanationRequest, db: Session = Depends(get_db)):
+    try:
+        prohibit_translation_ai()
+    except AIGovernanceViolation as exc:
+        audit(db, "translation_ai_request_blocked_by_policy", payload.retrieval.machine_profile_id, reason_code=exc.code, legacy_endpoint=True); db.commit()
+        raise HTTPException(410, {"code": exc.code, "message": exc.message, "deprecated": True})
     settings = get_settings(); provider = get_translation_provider(settings); policy = AIProcessingPolicy()
     provider_decision = policy.provider_allowed(provider.name)
     if not provider_decision.allowed:

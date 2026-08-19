@@ -1,4 +1,6 @@
-# Azure OpenAI translation provider
+# Historical Azure OpenAI translation provider (retired direction)
+
+> This document records the previous Phase 10 experiment. The translation provider can no longer be invoked: every CL/NCL explanation/translation path is rejected by centralized policy with `AI_CL_NCL_TRANSMISSION_PROHIBITED`. Current Azure work is limited to machine-level Post Builder assistance; see [the current plan](azure-openai-integration-plan.md).
 
 Phase 10 adds a dedicated `TranslationAIProvider` boundary. It is intentionally separate from the Manual Assistant provider and supports `disabled`, `mock`, and `azure_openai` modes. `mock` is the default and makes no network calls.
 

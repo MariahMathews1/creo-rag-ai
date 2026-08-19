@@ -22,6 +22,8 @@ import type {
   ToolpathResponse,
   TranslationAIProviderStatus, TranslationRetrievalRequest, TranslationRetrievalResponse,
   TranslationExplanationResponse, TranslationAIInvocation,
+  PostBuilderProviderStatus, PostBuilderSectionResponse,
+  PostBuilderEvidence, PostRuleDraft, PostSectionCompare, PostSectionDraft, PostSectionReadiness,
 } from "../types";
 
 const API_BASE_URL =
@@ -61,6 +63,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getPostSectionReadiness: (draftId: number) => request<PostSectionReadiness[]>(`/post-builder/${draftId}/readiness`),
+  getAssembledPost: (draftId: number) => request<import("../types").AssembledPostDraft>(`/post-builder/${draftId}/assembled`),
+  listPostSections: (draftId: number) => request<PostSectionDraft[]>(`/post-builder/${draftId}/sections`),
+  getPostSection: (draftId: number, section: string) => request<PostSectionDraft>(`/post-builder/${draftId}/sections/${section}`),
+  retrievePostBuilderEvidence: (draftId: number, section: string, query?: string) => request<PostBuilderEvidence[]>(`/post-builder/${draftId}/sections/${section}/retrieve-evidence`, { method: "POST", body: JSON.stringify({ query: query || null }) }),
+  generatePostSection: (draftId: number, section: string, evidenceIds: number[], evidenceMode: "same" | "refresh" = "refresh") => request<PostSectionDraft>(`/post-builder/${draftId}/sections/${section}/draft`, { method: "POST", body: JSON.stringify({ evidence_ids: evidenceIds, evidence_mode: evidenceMode, context_reviewed: true }) }),
+  reviewPostRule: (draftId: number, section: string, ruleId: number, action: "accept" | "edit-accept" | "reject" | "needs-information", payload: { reviewer_label: string; reason?: string | null; edited_template?: string | null }) => request<PostRuleDraft>(`/post-builder/${draftId}/sections/${section}/rules/${ruleId}/${action}`, { method: "POST", body: JSON.stringify(payload) }),
+  listPostSectionVersions: (draftId: number, section: string) => request<PostSectionDraft[]>(`/post-builder/${draftId}/sections/${section}/versions`),
+  comparePostSectionVersions: (draftId: number, section: string, left: number, right: number) => request<PostSectionCompare>(`/post-builder/${draftId}/sections/${section}/compare?left=${left}&right=${right}`),
+  setDocumentPostBuilderPolicy: (documentId: number, allowed: boolean, reviewerLabel: string) => request<SourceDocument>(`/documents/${documentId}/post-builder-ai-policy`, { method: "POST", body: JSON.stringify({ allowed, reviewer_label: reviewerLabel, acknowledgement: true }) }),
+  getPostBuilderProviderStatus: (checkReachability = false) => request<PostBuilderProviderStatus>(`/ai/post-builder/provider-status${checkReachability ? "?check_reachability=true" : ""}`),
+  draftPostBuilderSection: (payload: { machine_profile_id: number; machine_profile_revision_id?: number | null; post_draft_id?: number | null; selected_post_section: string; existing_reviewed_rules?: Array<Record<string, unknown>>; relevant_document_excerpts?: Array<Record<string, unknown>> }) => request<PostBuilderSectionResponse>("/ai/post-builder/sections/draft", { method: "POST", body: JSON.stringify(payload) }),
   getTranslationAIProviderStatus: (checkReachability = false) => request<TranslationAIProviderStatus>(`/ai/translation/provider-status${checkReachability ? "?check_reachability=true" : ""}`),
   retrieveTranslationExamples: (payload: TranslationRetrievalRequest) => request<TranslationRetrievalResponse>("/ai/translation/retrieve", { method: "POST", body: JSON.stringify(payload) }),
   explainTranslation: (retrieval: TranslationRetrievalRequest, exampleIds: number[]) => request<TranslationExplanationResponse>("/ai/translation/explain", { method: "POST", body: JSON.stringify({ retrieval, example_ids: exampleIds }) }),
@@ -399,6 +413,9 @@ export const api = {
   createGPostVersion: (draftId: number) => request<GPostDraft>(
     `/gpost-drafts/${draftId}/versions`, { method: "POST" },
   ),
+  listGPostVersions: (draftId: number) => request<GPostDraft[]>(`/gpost-drafts/${draftId}/versions`),
+  duplicateGPostDraft: (draftId: number) => request<GPostDraft>(`/gpost-drafts/${draftId}/duplicate`, { method: "POST" }),
+  deleteGPostDraft: (draftId: number) => request<void>(`/gpost-drafts/${draftId}`, { method: "DELETE" }),
   archiveGPostDraft: (draftId: number) => request<GPostDraft>(
     `/gpost-drafts/${draftId}/archive`, { method: "POST" },
   ),

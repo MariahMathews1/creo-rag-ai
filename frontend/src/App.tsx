@@ -16,6 +16,7 @@ import { StandardExtractionReviewPage } from "./pages/StandardExtractionReviewPa
 import { ApprovedProgramComparisonPage } from "./pages/ApprovedProgramComparisonPage";
 import { GPostGeneratorPage } from "./pages/GPostGeneratorPage";
 import { GPostWorkspacePage } from "./pages/GPostWorkspacePage";
+import { PostBuilderWorkspacePage } from "./pages/PostBuilderWorkspacePage";
 import { TranslationExamplesPage } from "./pages/TranslationExamplesPage";
 import { TranslationDetailPage } from "./pages/TranslationDetailPage";
 
@@ -35,7 +36,8 @@ export default function App() {
           <Route path="manual-assistant" element={<ManualAssistantPage />} />
           <Route path="machine-assistant" element={<ManualAssistantPage />} />
           <Route path="gpost" element={<GPostGeneratorPage />} />
-          <Route path="gpost/:draftId/*" element={<GPostWorkspacePage />} />
+          <Route path="gpost/:draftId/advanced/legacy-preview" element={<GPostWorkspacePage />} />
+          <Route path="gpost/:draftId/*" element={<PostBuilderWorkspacePage />} />
           <Route path="translations" element={<TranslationExamplesPage />} />
           <Route path="translations/patterns" element={<TranslationExamplesPage />} />
           <Route path="translations/ai-experiment" element={<TranslationExamplesPage />} />

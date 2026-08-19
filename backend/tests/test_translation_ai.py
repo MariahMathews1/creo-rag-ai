@@ -13,6 +13,7 @@ from app.schemas.translation_ai import TranslationRetrievalRequest
 from app.translation_ai.prompt import PromptPackage, TranslationPromptBuilder
 from app.translation_ai.provider import AzureOpenAITranslationProvider, DisabledTranslationProvider, MockTranslationProvider, TranslationAIError, get_translation_provider
 from app.translation_ai.retrieval import TranslationRetrievalService
+from app.ai.governance import AIGovernanceViolation
 
 
 def create_pair(client, db, machine, *, name="Synthetic spindle pair", post="REV-12", allowed=True, verified=True, cl="SPINDL/RPM,800,CLW", gc="S800 M03"):
@@ -100,15 +101,14 @@ def test_policy_and_prompt_data_minimization(client, db_session, machine_profile
     assert AIProcessingPolicy().example_allowed(row, machine_profile.id).reason_code == "AI_PROCESSING_NOT_ALLOWED"
 
 
-def test_mock_explanation_is_explicit_audited_and_structured(client, db_session, machine_profile):
+def test_mock_explanation_is_retired_before_prompt_or_invocation(client, db_session, machine_profile):
     row, revision = create_pair(client, db_session, machine_profile)
     payload = {"retrieval": {"machine_profile_id": machine_profile.id, "machine_profile_revision_id": revision.id, "post_processor_revision": "REV-12", "operation_type": "turning", "cl_text": "SPINDL / RPM,1200,CLW"}, "example_ids": [row.id]}
     response = client.post("/api/ai/translation/explain", json=payload)
-    assert response.status_code == 200, response.text
-    body = response.json(); assert body["suggested_mapping_pattern"] == "S{rpm} M03" and body["example_ids"] == [row.id]
-    assert body["advisory_only"] is True and body["provider_metadata"]["external_processing"] is False and body["provider_metadata"]["public_web"] is False
-    invocation = db_session.scalar(select(AIInvocation)); assert invocation and invocation.input_hash != payload["retrieval"]["cl_text"] and invocation.translation_example_ids_json == [row.id]
-    assert db_session.scalar(select(AuditEvent).where(AuditEvent.event_type == "translation_ai_explanation_completed"))
+    assert response.status_code == 410
+    assert response.json()["detail"]["code"] == "AI_CL_NCL_TRANSMISSION_PROHIBITED"
+    assert db_session.scalar(select(AIInvocation)) is None
+    assert db_session.scalar(select(AuditEvent).where(AuditEvent.event_type == "translation_ai_request_blocked_by_policy"))
 
 
 def test_policy_block_prevents_provider_and_prompt_for_nonconsented_example(client, db_session, machine_profile, monkeypatch):
@@ -116,7 +116,7 @@ def test_policy_block_prevents_provider_and_prompt_for_nonconsented_example(clie
     monkeypatch.setattr(TranslationPromptBuilder, "build", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("prompt builder must not run")))
     monkeypatch.setattr(MockTranslationProvider, "explain_translation", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("provider must not run")))
     response = client.post("/api/ai/translation/explain", json={"retrieval": {"machine_profile_id": machine_profile.id, "machine_profile_revision_id": revision.id, "cl_text": "SPINDL/RPM,1200,CLW"}, "example_ids": [row.id]})
-    assert response.status_code == 422 and response.json()["detail"]["code"] == "AI_PROCESSING_NOT_ALLOWED"
+    assert response.status_code == 410 and response.json()["detail"]["code"] == "AI_CL_NCL_TRANSMISSION_PROHIBITED"
 
 
 def test_explanation_rejects_example_outside_current_retrieval_scope(client, db_session, machine_profile, monkeypatch):
@@ -125,7 +125,7 @@ def test_explanation_rejects_example_outside_current_retrieval_scope(client, db_
     monkeypatch.setattr(MockTranslationProvider, "explain_translation", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("provider must not run")))
     response = client.post("/api/ai/translation/explain", json={"retrieval": {"machine_profile_id": machine_profile.id, "machine_profile_revision_id": revision.id, "post_processor_revision": "CURRENT", "cl_text": "SPINDL/RPM,1200,CLW"}, "example_ids": [excluded.id]})
     assert eligible.id != excluded.id
-    assert response.status_code == 422 and response.json()["detail"]["code"] == "AI_CONTEXT_SELECTION_INVALID"
+    assert response.status_code == 410 and response.json()["detail"]["code"] == "AI_CL_NCL_TRANSMISSION_PROHIBITED"
 
 
 def test_individual_consent_requires_acknowledgement_and_audits(client, db_session, machine_profile):
@@ -171,7 +171,7 @@ def test_azure_failures_are_typed_and_redacted():
     assert AzureOpenAITranslationProvider._safe_error(Content("secret")).code == "PROVIDER_CONTENT_FILTERED"
 
 
-def test_azure_invalid_structured_response_is_typed(monkeypatch):
+def test_azure_translation_provider_blocks_cl_before_transport(monkeypatch):
     settings = Settings(translation_ai_provider="azure_openai", azure_openai_endpoint="https://example.openai.azure.com", azure_openai_deployment="synthetic")
     provider = AzureOpenAITranslationProvider(settings)
     class Response: output_text = "not-json"
@@ -180,12 +180,12 @@ def test_azure_invalid_structured_response_is_typed(monkeypatch):
         def create(**_kwargs): return Response()
     class Client: responses = Responses()
     monkeypatch.setattr(provider, "_client", lambda: Client())
-    with pytest.raises(TranslationAIError) as raised:
+    with pytest.raises(AIGovernanceViolation) as raised:
         provider.explain_translation(PromptPackage("system", "user", [1]), "SPINDL/RPM,1200,CLW")
-    assert raised.value.code == "PROVIDER_INVALID_RESPONSE"
+    assert raised.value.code == "AI_CL_NCL_TRANSMISSION_PROHIBITED"
 
 
-def test_azure_content_filtered_response_is_typed(monkeypatch):
+def test_azure_translation_provider_never_reaches_content_filter_transport(monkeypatch):
     settings = Settings(translation_ai_provider="azure_openai", azure_openai_endpoint="https://example.openai.azure.com", azure_openai_deployment="synthetic")
     provider = AzureOpenAITranslationProvider(settings)
     class Error: code = "content_filter"
@@ -195,9 +195,9 @@ def test_azure_content_filtered_response_is_typed(monkeypatch):
         def create(**_kwargs): return Response()
     class Client: responses = Responses()
     monkeypatch.setattr(provider, "_client", lambda: Client())
-    with pytest.raises(TranslationAIError) as raised:
+    with pytest.raises(AIGovernanceViolation) as raised:
         provider.explain_translation(PromptPackage("system", "user", [1]), "SPINDL/RPM,1200,CLW")
-    assert raised.value.code == "PROVIDER_CONTENT_FILTERED"
+    assert raised.value.code == "AI_CL_NCL_TRANSMISSION_PROHIBITED"
 
 
 @pytest.mark.parametrize("count", [10, 100, 1_000, 10_000])

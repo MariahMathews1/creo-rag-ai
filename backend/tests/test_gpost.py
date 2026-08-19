@@ -141,6 +141,8 @@ def test_current_cl_preflight_blocks_only_unsupported_current_behavior(client, d
 
 def test_versioning_compare_exports_and_audit_events(client, db_session, machine_profile):
     first = create_draft(client, db_session, machine_profile).json()
+    templates = dict(first["templates_json"]); templates["comment"] = "[{text}]"
+    assert client.put(f"/api/gpost-drafts/{first['id']}", json={"templates_json": templates}).status_code == 200
     second = client.post(f"/api/gpost-drafts/{first['id']}/versions").json()
     assert second["version"] == 2
     assert client.get(f"/api/gpost-drafts/{first['id']}").json()["status"] == "superseded"
@@ -214,9 +216,38 @@ def test_draft_creation_requires_approved_profile_revision(client, db_session, m
 def test_optional_evidence_and_monotonic_versions(client, db_session, machine_profile):
     first = create_draft(client, db_session, machine_profile, manual_configuration_acknowledged=True).json()
     assert first["reference_program_ids_json"] == [] and first["standard_profile_id"] is None
+    templates = dict(first["templates_json"]); templates["comment"] = "[{text}]"
+    client.put(f"/api/gpost-drafts/{first['id']}", json={"templates_json": templates})
     second = client.post(f"/api/gpost-drafts/{first['id']}/versions").json()
+    templates = dict(second["templates_json"]); templates["comment"] = "/* {text} */"
+    client.put(f"/api/gpost-drafts/{second['id']}", json={"templates_json": templates})
     third = client.post(f"/api/gpost-drafts/{second['id']}/versions").json()
     assert [first["version"], second["version"], third["version"]] == [1, 2, 3]
+    assert [item["id"] for item in client.get(f"/api/gpost-drafts/{third['id']}/versions").json()] == [third["id"], second["id"], first["id"]]
+
+
+def test_version_creation_rejects_duplicate_snapshot(client, db_session, machine_profile):
+    draft = create_draft(client, db_session, machine_profile).json()
+    response = client.post(f"/api/gpost-drafts/{draft['id']}/versions")
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "GPOST_NO_VERSION_CHANGES"
+
+
+def test_duplicate_archive_and_delete_retention(client, db_session, machine_profile):
+    source = create_draft(client, db_session, machine_profile, name="Logical Post").json()
+    duplicate = client.post(f"/api/gpost-drafts/{source['id']}/duplicate")
+    assert duplicate.status_code == 201
+    assert duplicate.json()["version"] == 1 and duplicate.json()["created_from_draft_id"] is None
+    assert duplicate.json()["name"] == "Logical Post Copy"
+    assert client.get(f"/api/gpost-drafts/{source['id']}/versions").json()[0]["id"] == source["id"]
+    assert client.post(f"/api/gpost-drafts/{duplicate.json()['id']}/archive").json()["status"] == "archived"
+    assert client.delete(f"/api/gpost-drafts/{duplicate.json()['id']}").status_code == 204
+
+    templates = dict(source["templates_json"]); templates["comment"] = "[{text}]"
+    client.put(f"/api/gpost-drafts/{source['id']}", json={"templates_json": templates})
+    version = client.post(f"/api/gpost-drafts/{source['id']}/versions").json()
+    blocked = client.delete(f"/api/gpost-drafts/{version['id']}")
+    assert blocked.status_code == 409 and blocked.json()["detail"]["code"] == "GPOST_DELETE_RETENTION_BLOCKED"
 
 
 def test_kent_style_lathe_scenario_uses_lathe_defaults_and_blocks_multiaxis(client, db_session):

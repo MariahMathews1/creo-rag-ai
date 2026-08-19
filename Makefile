@@ -1,6 +1,6 @@
 PYTHON ?= python3.12
 
-.PHONY: install migrate seed-manual-demo seed-traceability-demo seed-profile-extraction-demo seed-approved-program-demo dev dev-backend dev-frontend test build
+.PHONY: install migrate seed-manual-demo seed-traceability-demo seed-profile-extraction-demo seed-approved-program-demo seed-post-builder-demo dev dev-backend dev-frontend test build
 
 install:
 	$(PYTHON) -m venv backend/.venv
@@ -27,6 +27,9 @@ seed-profile-extraction-demo:
 
 seed-approved-program-demo:
 	cd backend && .venv/bin/python -m app.scripts.seed_approved_program_demo
+
+seed-post-builder-demo:
+	cd backend && .venv/bin/python -m app.scripts.seed_post_builder_demo
 
 dev-frontend:
 	cd frontend && npm run dev

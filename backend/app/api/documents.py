@@ -12,7 +12,7 @@ from app.documents.storage import delete_stored_file, store_upload
 from app.models.entities import (
     AuditEvent, DocumentChunk, DocumentType, MachineProfile, SourceDocument,
 )
-from app.schemas.documents import DocumentContent, DocumentRead, SearchResult
+from app.schemas.documents import DocumentContent, DocumentPostBuilderPolicyUpdate, DocumentRead, SearchResult
 
 router = APIRouter(tags=["documents"])
 
@@ -101,6 +101,23 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
     return document_or_404(document_id, db)
 
 
+@router.post("/documents/{document_id}/post-builder-ai-policy", response_model=DocumentRead)
+def update_post_builder_policy(document_id: int, payload: DocumentPostBuilderPolicyUpdate, db: Session = Depends(get_db)):
+    document = document_or_404(document_id, db)
+    if not payload.acknowledgement:
+        raise HTTPException(422, "Explicit acknowledgement is required")
+    eligible_types = {DocumentType.MACHINE_MANUAL, DocumentType.CONTROLLER_MANUAL, DocumentType.PROGRAMMING_MANUAL,
+                      DocumentType.SPECIFICATION_DOCUMENT, DocumentType.POST_PROCESSOR_DOCUMENT,
+                      DocumentType.COMPANY_STANDARD, DocumentType.PARAMETER_LIST, DocumentType.MACHINE_CONFIGURATION_DOCUMENT}
+    if payload.allowed and document.document_type not in eligible_types:
+        raise HTTPException(422, "Only machine-level documents may be enabled for Post Builder AI use")
+    document.ai_post_builder_allowed = payload.allowed
+    db.add(AuditEvent(event_type="document_post_builder_ai_policy_changed", machine_profile_id=document.machine_profile_id,
+                      document_id=document.id, metadata_json={"allowed": payload.allowed, "reviewer_label": payload.reviewer_label}))
+    db.commit(); db.refresh(document)
+    return document
+
+
 @router.get("/documents/{document_id}/content", response_model=DocumentContent)
 def get_document_content(document_id: int, db: Session = Depends(get_db)):
     document = document_or_404(document_id, db)
@@ -183,4 +200,3 @@ def citation_opened(document_id: int, db: Session = Depends(get_db)):
     ))
     db.commit()
     return Response(status_code=204)
-

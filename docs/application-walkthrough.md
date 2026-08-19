@@ -20,3 +20,6 @@ Open **Toolpath** within Analysis, a Translation Example, or a completed G-POST 
 Open **Translation Examples → AI Retrieval Preview**. Select an exact machine and revision, enter the post/operation context and a CL segment, then choose **Find Similar Verified Examples**. Retrieval remains internal and reports that no AI call occurred. Review and select the returned examples before choosing **Generate AI Interpretation**. The result shows its provider, example IDs, uncertainty, and audit invocation.
 
 Individual Translation Example detail pages expose explicit AI-processing permission. G-POST mapping detail offers the same read-only retrieval/interpretation workflow without changing the mapping.
+# Phase 11 Post Builder workflow
+
+From a machine-scoped Post Builder draft, open **Post Builder** to see contextual readiness for each machine-level section. Select one section, inspect the three-column machine-facts/evidence/action workspace, review the minimized AI context, and explicitly request an R&D draft. Review every proposed rule independently, regenerate into immutable section revisions when needed, compare those revisions, then create a whole-post version or export a review artifact. Cycles remain visible but deferred. CL/NCL, part geometry, toolpaths, and production programs never enter this AI workflow.

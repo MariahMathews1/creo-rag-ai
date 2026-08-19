@@ -23,7 +23,7 @@ from app.models.program_standards import (
 )
 from app.models.gpost import (
     GPostDraft, GPostDraftVersion, GPostMapping, GPostMappingEvidence,
-    GPostPreviewRun,
+    GPostPreviewRun, PostRuleDraft, PostSectionDraft,
 )
 from app.models.translation import TranslationAlignment, TranslationAlignmentLink, TranslationExample
 from app.models.translation_ai import AIInvocation
@@ -40,6 +40,6 @@ __all__ = [
     "StandardConventionEvidence", "ProgramComparisonRun",
     "ProgramComparisonFinding",
     "GPostDraft", "GPostDraftVersion", "GPostMapping",
-    "GPostMappingEvidence", "GPostPreviewRun",
+    "GPostMappingEvidence", "GPostPreviewRun", "PostSectionDraft", "PostRuleDraft",
     "TranslationExample", "TranslationAlignment", "TranslationAlignmentLink", "AIInvocation",
 ]

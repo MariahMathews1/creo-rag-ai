@@ -12,10 +12,10 @@ beforeEach(() => {
   vi.mocked(api.getTranslationSummary).mockResolvedValue({ total: 0, candidates: 0, reviewed: 0, verified: 0, deprecated: 0, invalid: 0, by_machine: [], by_post_revision: [], by_operation: [] });
 });
 
-test("dashboard has one G-POST CTA and four compact secondary quick actions", async () => {
+test("dashboard leads with Post Builder and four compact secondary quick actions", async () => {
   render(<MemoryRouter><DashboardPage /></MemoryRouter>);
   await screen.findByText("Quick Actions");
-  expect(screen.getAllByRole("link", { name: "Generate G-POST Draft" })).toHaveLength(1);
+  expect(screen.getAllByRole("link", { name: "Open Post Builder" })).toHaveLength(1);
   const quick = screen.getByRole("region", { name: "Quick actions" });
   expect(quick.querySelectorAll("a.button.secondary")).toHaveLength(4);
 });

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -149,6 +149,7 @@ class SourceDocument(Base):
         Enum(ProcessingStatus), default=ProcessingStatus.UPLOADED
     )
     processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_post_builder_allowed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     page_data: Mapped[list[dict]] = mapped_column(JSON, default=list)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

@@ -2,7 +2,7 @@
 
 ## V1 product simplification — complete
 
-Primary navigation, Dashboard, Machines, Documents, Translation Examples, G-POST Generator, Machine Assistant, and G-code Review now follow the NC programmer mental model. See [V1 UI reduction decisions](v1-ui-reduction-decisions.md).
+Primary navigation, Dashboard, Machines, Documents, Post Builder, Historical Post Examples, Machine Assistant, and G-code Review now follow the post-engineering workflow. See [V1 UI reduction decisions](v1-ui-reduction-decisions.md).
 
 ## V1 usability polish and contextual status semantics — complete
 
@@ -20,21 +20,28 @@ Implemented versioned storage, import/deduplication, provenance review, verifica
 
 Implemented lathe X/Z and mill XY/XZ/YZ Canvas views with programmed-motion, line/alignment/finding traceability, supported arc geometry, accessibility table, and large-program simplification. Material removal remains explicitly separate.
 
-## Phase 10 — Azure OpenAI Provider Infrastructure (implemented)
+## Phase 10 — Azure OpenAI translation experiment infrastructure (historical)
 
-Implemented the dedicated provider abstraction, deterministic mock, Entra-ID-first Azure v1 client, centralized data-policy enforcement, internal verified-example retrieval, explicit consent, minimized prompts, structured explanation-only output, safe status, and content-minimized invocation audit. No production-authorized output is generated.
+Implemented a controlled translation experiment. The direction is now retired: CL/NCL provider invocation is prohibited, while local retrieval/alignment remains for historical research and regression evidence.
 
-## Phase 11 — Retrieval-Assisted CL → G-code Translation
+## Phase 11 — AI-assisted Post Builder section drafting (implemented)
 
-Retrieve exact-machine verified pairs, construct controlled context, generate an advisory draft, parse and validate it, compare it historically, visualize it, and require qualified review. Make fallback scope explicit.
+Implemented a separate `PostBuilderAIProvider`, centralized prohibition of CL/NCL and part-specific provider context, deterministic section evidence retrieval, contextual readiness, immutable structured section/rule drafts, rule-level review, version comparison, exports, audit, fictional seed data, and a three-column Post Builder UI. Cycles remain deferred. See [Phase 11 section drafting](phase11-post-section-drafting.md).
 
-## Phase 12 — Existing Post vs AI Translation Benchmark
+## Phase 12 — Machine-knowledge curation and post-rule coverage
 
-Run held-out same-input comparisons and report command, modal, coordinate, state, completeness, validation, and unsupported-segment metrics by machine/post/operation.
+Improve document excerpt approval, missing-information workflows, machine capability coverage, evidence citations, and machine-level post rule completeness.
+
+## Phase 13 — Site-format exporter and controlled post validation
+
+Implement a proprietary site/PTC export adapter only after the target format is verified. Add controlled fixtures, deterministic rule checks, version comparison, simulation/prove-out evidence, and qualified approval gates.
+
+## Phase 14 — Runtime integration (no AI)
+
+Integrate only approved post artifacts into the Creo/G-POST runtime. Runtime CL/NCL to G-code translation remains deterministic and contains no AI provider call.
 
 ## Later investigations
 
-- deterministic document extraction provider and optional MATLAB evaluation;
+- deterministic document extraction and optional MATLAB evaluation/interchange;
 - advanced historical evidence integration into G-POST mappings;
-- fine-tuning experiments only if corpus scale, governance, and benchmark evidence justify them;
 - qualified simulation integrations and stronger enterprise controls.

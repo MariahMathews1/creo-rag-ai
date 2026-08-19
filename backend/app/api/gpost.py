@@ -1,17 +1,16 @@
-import json
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.gpost.service import (
     SAFETY_NOTICE, audit, capability_snapshot, compare_drafts, default_templates,
-    controller_family_compatible, current_cl_preflight, family_compatible, generate_preview, initial_mappings, markdown_export, review_summary,
+    controller_family_compatible, current_cl_preflight, family_compatible, generate_preview, initial_mappings, review_summary,
     revision_snapshot, snapshot_draft, validate_ownership,
 )
+from app.gpost.exporters import get_post_draft_exporter
 from app.models.entities import DocumentChunk, MachineProfile, SourceDocument, utc_now
-from app.models.gpost import GPostDraft, GPostDraftVersion, GPostMapping, GPostMappingEvidence, GPostPreviewRun
+from app.models.gpost import GPostDraft, GPostDraftVersion, GPostMapping, GPostMappingEvidence, GPostPreviewRun, PostRuleDraft, PostSectionDraft
 from app.models.profile_extraction import MachineProfileRevision
 from app.models.program_standards import ReferenceProgram, StandardConvention
 from app.models.translation import TranslationAlignment, TranslationAlignmentLink, TranslationExample
@@ -72,6 +71,41 @@ def ownership_error(callable_):
         raise HTTPException(422, str(exc)) from exc
 
 
+def logical_post_versions(db: Session, draft: GPostDraft) -> list[GPostDraft]:
+    """Return only the connected version lineage for one logical post."""
+    candidates = list(db.scalars(select(GPostDraft).where(GPostDraft.machine_profile_id == draft.machine_profile_id)))
+    connected = {draft.id}
+    changed = True
+    while changed:
+        changed = False
+        for item in candidates:
+            if item.id in connected or item.created_from_draft_id in connected:
+                before = len(connected); connected.add(item.id)
+                if item.created_from_draft_id is not None: connected.add(item.created_from_draft_id)
+                changed = changed or len(connected) != before
+    return sorted((item for item in candidates if item.id in connected), key=lambda item: item.version, reverse=True)
+
+
+def latest_section_rows(db: Session, draft_id: int) -> list[PostSectionDraft]:
+    return list(db.scalars(select(PostSectionDraft).options(selectinload(PostSectionDraft.rules)).where(
+        PostSectionDraft.gpost_draft_id == draft_id,
+        PostSectionDraft.id.in_(select(func.max(PostSectionDraft.id)).where(
+            PostSectionDraft.gpost_draft_id == draft_id).group_by(PostSectionDraft.section_key)),
+    )).unique())
+
+
+def version_snapshot(db: Session, draft: GPostDraft) -> dict:
+    mappings = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == draft.id)))
+    snapshot = snapshot_draft(draft, mappings)
+    snapshot["post_sections"] = [{
+        "section_key": section.section_key, "section_version": section.section_version, "status": section.status,
+        "rules": [{"rule_key": rule.rule_key, "status": rule.status,
+                   "template": rule.engineer_template or rule.ai_draft_template,
+                   "evidence_ids": rule.evidence_ids_json} for rule in section.rules],
+    } for section in sorted(latest_section_rows(db, draft.id), key=lambda item: item.section_key)]
+    return snapshot
+
+
 @router.post("/machines/{machine_id}/gpost-drafts", response_model=GPostDraftRead, status_code=status.HTTP_201_CREATED)
 def create_draft(machine_id: int, payload: GPostDraftCreate, db: Session = Depends(get_db)):
     machine = db.get(MachineProfile, machine_id)
@@ -111,7 +145,7 @@ def create_draft(machine_id: int, payload: GPostDraftCreate, db: Session = Depen
     db.flush()
     mappings = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == draft.id)))
     draft.review_summary_json = review_summary(mappings)
-    db.add(GPostDraftVersion(gpost_draft_id=draft.id, version=1, snapshot_json=snapshot_draft(draft, mappings), change_summary_json={"created": True}))
+    db.add(GPostDraftVersion(gpost_draft_id=draft.id, version=1, snapshot_json=version_snapshot(db, draft), change_summary_json={"created": True}))
     audit(db, "gpost_draft_created", draft, version=1)
     if payload.selected_document_ids:
         audit(db, "gpost_document_reference_added", draft, document_ids=payload.selected_document_ids)
@@ -129,6 +163,11 @@ def list_drafts(machine_id: int, db: Session = Depends(get_db)):
 @router.get("/gpost-drafts/{draft_id}", response_model=GPostDraftRead)
 def get_draft(draft_id: int, db: Session = Depends(get_db)):
     return draft_or_404(draft_id, db)
+
+
+@router.get("/gpost-drafts/{draft_id}/versions", response_model=list[GPostDraftRead])
+def list_versions(draft_id: int, db: Session = Depends(get_db)):
+    return logical_post_versions(db, draft_or_404(draft_id, db))
 
 
 @router.put("/gpost-drafts/{draft_id}", response_model=GPostDraftRead)
@@ -157,7 +196,15 @@ def update_draft(draft_id: int, payload: GPostDraftUpdate, db: Session = Depends
 @router.post("/gpost-drafts/{draft_id}/versions", response_model=GPostDraftRead, status_code=status.HTTP_201_CREATED)
 def create_version(draft_id: int, db: Session = Depends(get_db)):
     old = draft_or_404(draft_id, db)
-    next_version = (db.scalar(select(func.max(GPostDraft.version)).where(GPostDraft.machine_profile_id == old.machine_profile_id, GPostDraft.name == old.name)) or 0) + 1
+    lineage = logical_post_versions(db, old)
+    latest_saved = db.scalar(select(GPostDraftVersion).where(GPostDraftVersion.gpost_draft_id == old.id).order_by(GPostDraftVersion.created_at.desc()))
+    current_snapshot = version_snapshot(db, old)
+    if latest_saved:
+        saved = dict(latest_saved.snapshot_json)
+        saved.setdefault("post_sections", [])
+        if current_snapshot == saved:
+            raise HTTPException(409, {"code": "GPOST_NO_VERSION_CHANGES", "message": f"No changes since v{old.version}."})
+    next_version = max(item.version for item in lineage) + 1
     new = GPostDraft(
         machine_profile_id=old.machine_profile_id, machine_profile_revision_id=old.machine_profile_revision_id,
         created_from_draft_id=old.id, name=old.name, version=next_version, status="review_required",
@@ -183,10 +230,30 @@ def create_version(draft_id: int, db: Session = Depends(get_db)):
             db.add(GPostMappingEvidence(gpost_mapping_id=clone.id, **{key: getattr(evidence, key) for key in (
                 "source_type", "document_id", "document_chunk_id", "reference_program_id", "standard_convention_id",
                 "page", "section", "excerpt", "authority_level", "metadata_json")}))
+    section_rows = latest_section_rows(db, old.id)
+    for section in section_rows:
+        section_clone = PostSectionDraft(gpost_draft_id=new.id, section_key=section.section_key, section_version=section.section_version,
+            status=section.status, source_type="whole_post_version_snapshot", machine_context_snapshot_json=dict(section.machine_context_snapshot_json),
+            draft_templates_json=list(section.draft_templates_json), missing_information_json=list(section.missing_information_json),
+            assumptions_json=list(section.assumptions_json), warnings_json=list(section.warnings_json), source_evidence_json=list(section.source_evidence_json),
+            ai_generated=section.ai_generated, provider=section.provider, model=section.model, prompt_version=section.prompt_version,
+            response_schema_version=section.response_schema_version, reviewed_at=section.reviewed_at)
+        db.add(section_clone); db.flush()
+        for rule in section.rules:
+            db.add(PostRuleDraft(post_section_draft_id=section_clone.id, rule_key=rule.rule_key, name=rule.name, description=rule.description,
+                condition=rule.condition, output_behavior=rule.output_behavior, ai_draft_template=rule.ai_draft_template,
+                engineer_template=rule.engineer_template, required_machine_facts_json=list(rule.required_machine_facts_json),
+                evidence_ids_json=list(rule.evidence_ids_json), assumptions_json=list(rule.assumptions_json), warnings_json=list(rule.warnings_json),
+                status=rule.status, review_reason=rule.review_reason, reviewer_label=rule.reviewer_label, reviewed_at=rule.reviewed_at))
     old.status = "superseded"; old.superseded_at = utc_now()
     db.flush()
     copied = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == new.id)))
-    db.add(GPostDraftVersion(gpost_draft_id=new.id, version=next_version, snapshot_json=snapshot_draft(new, copied), change_summary_json={"created_from_draft_id": old.id}))
+    snapshot = version_snapshot(db, new)
+    snapshot["accepted_post_sections"] = [{"section_key": item.section_key, "section_version": item.section_version, "status": item.status,
+        "rules": [{"rule_key": rule.rule_key, "status": rule.status, "template": rule.engineer_template or rule.ai_draft_template,
+                   "evidence_ids": rule.evidence_ids_json, "reviewer": rule.reviewer_label} for rule in item.rules]}
+        for item in section_rows if item.status == "accepted"]
+    db.add(GPostDraftVersion(gpost_draft_id=new.id, version=next_version, snapshot_json=snapshot, change_summary_json={"created_from_draft_id": old.id, "post_sections_preserved": len(section_rows)}))
     audit(db, "gpost_version_created", new, created_from_draft_id=old.id, version=next_version)
     db.commit(); db.refresh(new)
     return new
@@ -194,7 +261,60 @@ def create_version(draft_id: int, db: Session = Depends(get_db)):
 
 @router.post("/gpost-drafts/{draft_id}/archive", response_model=GPostDraftRead)
 def archive_draft(draft_id: int, db: Session = Depends(get_db)):
-    draft = draft_or_404(draft_id, db); draft.status = "archived"; db.commit(); db.refresh(draft); return draft
+    draft = draft_or_404(draft_id, db); draft.status = "archived"
+    audit(db, "gpost_draft_archived", draft); db.commit(); db.refresh(draft); return draft
+
+
+@router.post("/gpost-drafts/{draft_id}/duplicate", response_model=GPostDraftRead, status_code=status.HTTP_201_CREATED)
+def duplicate_draft(draft_id: int, db: Session = Depends(get_db)):
+    source = draft_or_404(draft_id, db)
+    duplicate = GPostDraft(machine_profile_id=source.machine_profile_id, machine_profile_revision_id=source.machine_profile_revision_id,
+        created_from_draft_id=None, name=f"{source.name} Copy", version=1, status="review_required",
+        controller_family=source.controller_family, machine_type=source.machine_type,
+        selected_document_ids_json=list(source.selected_document_ids_json), standard_profile_id=source.standard_profile_id,
+        reference_program_ids_json=list(source.reference_program_ids_json), capability_snapshot_json=dict(source.capability_snapshot_json),
+        manual_configuration_acknowledged=source.manual_configuration_acknowledged,
+        machine_profile_snapshot_json=dict(source.machine_profile_snapshot_json), templates_json=dict(source.templates_json),
+        unsupported_features_json=list(source.unsupported_features_json), warnings_json=list(source.warnings_json),
+        review_summary_json=dict(source.review_summary_json))
+    db.add(duplicate); db.flush()
+    for item in db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == source.id)):
+        db.add(GPostMapping(gpost_draft_id=duplicate.id, **{key: getattr(item, key) for key in (
+            "mapping_key", "cl_command", "mapping_type", "output_template", "template_key", "template_override", "uses_override",
+            "support_status", "required_for_v1", "description", "conditions_json", "required_state_json", "resulting_state_json",
+            "machine_type_scope", "dialect_scope", "supported", "confidence", "source_type", "source_document_id", "source_chunk_id",
+            "source_page", "source_section", "source_excerpt", "source_authority", "review_status", "review_note")}))
+    for section in latest_section_rows(db, source.id):
+        clone = PostSectionDraft(gpost_draft_id=duplicate.id, section_key=section.section_key, section_version=1,
+            status=section.status, source_type="duplicated_post_configuration", machine_context_snapshot_json=dict(section.machine_context_snapshot_json),
+            draft_templates_json=list(section.draft_templates_json), missing_information_json=list(section.missing_information_json),
+            assumptions_json=list(section.assumptions_json), warnings_json=list(section.warnings_json), source_evidence_json=list(section.source_evidence_json),
+            ai_generated=section.ai_generated, provider=section.provider, model=section.model, prompt_version=section.prompt_version,
+            response_schema_version=section.response_schema_version, reviewed_at=section.reviewed_at)
+        db.add(clone); db.flush()
+        for rule in section.rules:
+            db.add(PostRuleDraft(post_section_draft_id=clone.id, rule_key=rule.rule_key, name=rule.name, description=rule.description,
+                condition=rule.condition, output_behavior=rule.output_behavior, ai_draft_template=rule.ai_draft_template,
+                engineer_template=rule.engineer_template, required_machine_facts_json=list(rule.required_machine_facts_json),
+                evidence_ids_json=list(rule.evidence_ids_json), assumptions_json=list(rule.assumptions_json), warnings_json=list(rule.warnings_json),
+                status=rule.status, review_reason=rule.review_reason, reviewer_label=rule.reviewer_label, reviewed_at=rule.reviewed_at))
+    db.flush()
+    db.add(GPostDraftVersion(gpost_draft_id=duplicate.id, version=1, snapshot_json=version_snapshot(db, duplicate),
+                             change_summary_json={"duplicated_from_draft_id": source.id}))
+    audit(db, "gpost_draft_duplicated", duplicate, duplicated_from_draft_id=source.id)
+    db.commit(); db.refresh(duplicate); return duplicate
+
+
+@router.delete("/gpost-drafts/{draft_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_draft(draft_id: int, db: Session = Depends(get_db)):
+    draft = draft_or_404(draft_id, db)
+    lineage = logical_post_versions(db, draft)
+    if len(lineage) > 1 or draft.status == "superseded":
+        raise HTTPException(409, {"code": "GPOST_DELETE_RETENTION_BLOCKED",
+            "message": "This post has immutable version history and cannot be deleted. Archive it instead."})
+    audit(db, "gpost_draft_deleted", draft, retained_audit=True)
+    db.execute(delete(GPostDraftVersion).where(GPostDraftVersion.gpost_draft_id == draft.id))
+    db.delete(draft); db.commit()
 
 
 @router.get("/gpost-drafts/{draft_id}/mappings", response_model=list[GPostMappingRead])
@@ -330,11 +450,10 @@ def compare(draft_id: int, other_draft_id: int, db: Session = Depends(get_db)):
 def export_draft(draft_id: int, format: str = Query("json", pattern="^(json|markdown)$"), db: Session = Depends(get_db)):
     draft = draft_or_404(draft_id, db)
     mappings = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == draft.id).order_by(GPostMapping.cl_command)))
+    sections = list(db.scalars(select(PostSectionDraft).options(selectinload(PostSectionDraft.rules)).where(
+        PostSectionDraft.gpost_draft_id == draft.id,
+        PostSectionDraft.id.in_(select(func.max(PostSectionDraft.id)).where(PostSectionDraft.gpost_draft_id == draft.id).group_by(PostSectionDraft.section_key)),
+    ).order_by(PostSectionDraft.section_key)).unique())
     audit(db, "gpost_exported", draft, format=format); db.commit()
-    if format == "markdown":
-        return Response(markdown_export(draft, mappings), media_type="text/markdown", headers={"Content-Disposition": f'attachment; filename="gpost-draft-v{draft.version}.md"'})
-    payload = snapshot_draft(draft, mappings)
-    payload.update({"machine_profile_snapshot": draft.machine_profile_snapshot_json, "capability_snapshot": draft.capability_snapshot_json,
-                    "unsupported_features": draft.unsupported_features_json, "safety_notice": SAFETY_NOTICE,
-                    "labels": ["R&D ONLY", "NON-PRODUCTION", "NOT VALIDATED FOR MACHINE USE"]})
-    return Response(json.dumps(payload, indent=2, default=str), media_type="application/json", headers={"Content-Disposition": f'attachment; filename="gpost-draft-v{draft.version}.json"'})
+    exported = get_post_draft_exporter(format).export(draft, mappings, sections)
+    return Response(exported.content, media_type=exported.media_type, headers={"Content-Disposition": f'attachment; filename="post-builder-draft-v{draft.version}.{exported.extension}"'})

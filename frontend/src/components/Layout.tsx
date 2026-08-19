@@ -4,8 +4,8 @@ const links = [
   { to: "/", label: "Dashboard", glyph: "▦" },
   { to: "/machines", label: "Machines", glyph: "◆" },
   { to: "/documents", label: "Documents", glyph: "▤" },
-  { to: "/translations", label: "Translation Examples", glyph: "⇄" },
-  { to: "/gpost", label: "G-POST Generator", glyph: "⚙" },
+  { to: "/gpost", label: "Post Builder", glyph: "⚙" },
+  { to: "/translations", label: "Historical Post Examples", glyph: "⇄" },
   { to: "/machine-assistant", label: "Machine Assistant", glyph: "?" },
 ];
 

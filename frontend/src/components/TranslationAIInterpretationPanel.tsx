@@ -1,32 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { api } from "../api/client";
-import type { MachineProfile, MachineProfileRevision, TranslationAIProviderStatus, TranslationExplanationResponse, TranslationRetrievalRequest, TranslationRetrievalResponse } from "../types";
+import type { MachineProfile } from "../types";
 import "./translation-ai.css";
 
-const operations = ["turning", "facing", "boring", "drilling", "threading", "grooving", "parting", "milling", "pocketing", "contouring", "tapping", "reaming", "other"];
-
-export function TranslationAIInterpretationPanel({ machines, initialMachineId = 0, initialRevisionId = 0, initialCl = "", compact = false }: { machines: MachineProfile[]; initialMachineId?: number; initialRevisionId?: number; initialCl?: string; compact?: boolean }) {
-  const [status, setStatus] = useState<TranslationAIProviderStatus | null>(null); const [machineId, setMachineId] = useState(initialMachineId);
-  const [revisionId, setRevisionId] = useState(initialRevisionId); const [revisions, setRevisions] = useState<MachineProfileRevision[]>([]);
-  const [postRevision, setPostRevision] = useState(""); const [operation, setOperation] = useState("turning"); const [clText, setClText] = useState(initialCl);
-  const [allowRevisionFallback, setAllowRevisionFallback] = useState(false); const [retrieval, setRetrieval] = useState<TranslationRetrievalResponse | null>(null);
-  const [allowMachineFamilyFallback, setAllowMachineFamilyFallback] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set()); const [explanation, setExplanation] = useState<TranslationExplanationResponse | null>(null);
-  const [busy, setBusy] = useState<"retrieve" | "explain" | "health" | null>(null); const [error, setError] = useState("");
-  useEffect(() => { void api.getTranslationAIProviderStatus().then(setStatus).catch((cause) => setError(cause.message)); }, []);
-  useEffect(() => { if (!machineId) return; void api.listProfileRevisions(machineId).then((items) => { setRevisions(items); if (!revisionId) setRevisionId((items.find((item) => ["approved", "active"].includes(item.status)) ?? items[0])?.id ?? 0); }).catch((cause) => setError(cause.message)); }, [machineId]);
-  const machine = useMemo(() => machines.find((item) => item.id === machineId), [machines, machineId]);
-  const request: TranslationRetrievalRequest = { machine_profile_id: machineId, machine_profile_revision_id: revisionId || null, controller_name: machine?.controller_name ?? null, post_processor_revision: postRevision || null, operation_type: operation, cl_text: clText, max_examples: 5, allow_revision_fallback: allowRevisionFallback, allow_machine_family_fallback: allowMachineFamilyFallback };
-  async function retrieve() { setBusy("retrieve"); setError(""); setExplanation(null); try { const result = await api.retrieveTranslationExamples(request); setRetrieval(result); setSelectedIds(new Set(result.examples.map((item) => item.example_id))); } catch (cause) { setError(cause instanceof Error ? cause.message : "Retrieval failed."); } finally { setBusy(null); } }
-  async function explain() { setBusy("explain"); setError(""); try { setExplanation(await api.explainTranslation(request, [...selectedIds])); } catch (cause) { setError(cause instanceof Error ? cause.message : "AI interpretation failed."); } finally { setBusy(null); } }
-  async function health() { setBusy("health"); try { setStatus(await api.getTranslationAIProviderStatus(true)); } catch (cause) { setError(cause instanceof Error ? cause.message : "Connectivity check failed."); } finally { setBusy(null); } }
-  return <section className={`translation-ai-panel panel ${compact ? "compact" : ""}`}>
-    <header><div><span className="eyebrow">Controlled internal evidence</span><h2>AI-Assisted Interpretation</h2><p>Retrieve first, review the examples, then explicitly request an advisory interpretation. No executable program is generated.</p></div>{status && <dl className="ai-provider-status"><div><dt>AI Provider</dt><dd>{status.provider.replaceAll("_", " ")}</dd></div><div><dt>External Processing</dt><dd>{status.external_processing ? "Enabled" : "Disabled"}</dd></div><div><dt>Public Web</dt><dd>Disabled</dd></div><div><dt>Data Source</dt><dd>{status.data_source}</dd></div></dl>}</header>
-    {status?.provider === "azure_openai" && <button className="button secondary" disabled={busy === "health"} onClick={() => void health()}>{busy === "health" ? "Checking…" : "Check Azure connectivity"}</button>}
-    {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="ai-retrieval-form"><label>Machine<select value={machineId || ""} onChange={(event) => { setMachineId(Number(event.target.value)); setRevisionId(0); }}><option value="">Select machine</option>{machines.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Revision<select value={revisionId || ""} onChange={(event) => setRevisionId(Number(event.target.value))}><option value="">Select revision</option>{revisions.map((item) => <option key={item.id} value={item.id}>v{item.revision_number} · {item.status}</option>)}</select></label><label>Post revision<input value={postRevision} onChange={(event) => setPostRevision(event.target.value)} placeholder="Exact post preferred" /></label><label>Operation<select value={operation} onChange={(event) => setOperation(event.target.value)}>{operations.map((item) => <option key={item}>{item}</option>)}</select></label><label className="full-width">CL segment<textarea value={clText} onChange={(event) => setClText(event.target.value)} placeholder="SPINDL / RPM,1200,CLW" /></label><label className="checkbox-label full-width"><input type="checkbox" checked={allowRevisionFallback} onChange={(event) => setAllowRevisionFallback(event.target.checked)} />Explicitly allow same-machine revision/post fallback</label><label className="checkbox-label full-width"><input type="checkbox" checked={allowMachineFamilyFallback} onChange={(event) => setAllowMachineFamilyFallback(event.target.checked)} />Explicitly allow other-machine examples with the same controller</label><button className="button primary" disabled={!machineId || !revisionId || !clText.trim() || busy !== null} onClick={() => void retrieve()}>{busy === "retrieve" ? "Retrieving…" : "Find Similar Verified Examples"}</button></div>
-    {retrieval && <section className="ai-retrieval-results"><header><h3>Retrieval Preview</h3><p>Scope: <code>{retrieval.retrieval_scope}</code> · AI called: No</p></header>{retrieval.warnings.map((warning) => <p className="context-note" key={warning}>{warning}</p>)}{retrieval.examples.length > 0 && <div className="translation-table-wrap"><table className="translation-table"><thead><tr><th>Use</th><th>Example</th><th>Machine</th><th>Post Revision</th><th>Operation</th><th>CL Match</th><th>Alignment</th><th>Why Retrieved</th><th>AI Allowed</th></tr></thead><tbody>{retrieval.examples.map((item) => <tr key={item.example_id}><td><input aria-label={`Use example ${item.example_id}`} type="checkbox" checked={selectedIds.has(item.example_id)} onChange={(event) => { const next = new Set(selectedIds); event.target.checked ? next.add(item.example_id) : next.delete(item.example_id); setSelectedIds(next); }} /></td><td><Link to={`/translations/${item.example_id}`}>{item.name} #{item.example_id}</Link><small><code>{item.cl_excerpt}</code></small></td><td>{item.machine}</td><td>{item.post_revision || "Unknown"}</td><td>{item.operation}</td><td>{item.cl_pattern_match}</td><td>{item.alignment_coverage}%</td><td>{item.retrieval_reasons.join(" + ")}</td><td>{item.ai_processing_allowed ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}<button className="button primary" disabled={status?.provider === "disabled" || selectedIds.size === 0 || busy !== null} onClick={() => void explain()}>{busy === "explain" ? "Generating…" : "Generate AI Interpretation"}</button></section>}
-    {explanation && <article className="ai-explanation"><header><h3>Interpretation</h3><span>{String(explanation.provider_metadata.provider)} · Invocation #{explanation.invocation_id}</span></header><p>{explanation.short_rationale}</p><dl><div><dt>Suggested observed pattern</dt><dd><code>{explanation.suggested_mapping_pattern || "No supported pattern suggested"}</code></dd></div><div><dt>Examples used</dt><dd>{explanation.example_ids.map((id) => <Link key={id} to={`/translations/${id}`}>#{id}</Link>)}</dd></div><div><dt>Uncertainties</dt><dd>{explanation.uncertainties.join(" · ") || "None reported"}</dd></div><div><dt>Unsupported</dt><dd>{explanation.unsupported_features.join(" · ") || "None reported"}</dd></div></dl><strong>{explanation.safety_notice}</strong></article>}
+/**
+ * Compatibility shell for previous routes/imports.
+ *
+ * Deliberately contains no provider calls and no CL/NCL input. The backend also
+ * rejects the retired invocation, so restoring an old route cannot bypass the
+ * current governance boundary.
+ */
+export function TranslationAIInterpretationPanel(_props: {
+  machines: MachineProfile[];
+  initialMachineId?: number;
+  initialRevisionId?: number;
+  initialCl?: string;
+  compact?: boolean;
+}) {
+  return <section className="translation-ai-panel panel deprecated-ai-experiment">
+    <header><div><span className="eyebrow">Deprecated / Previous R&amp;D Experiment</span><h2>Legacy CL/NCL AI workflow disabled</h2></div></header>
+    <p>This compatibility view cannot invoke an AI provider. Historical examples remain available for local deterministic analysis only.</p>
+    <strong>AI_CL_NCL_TRANSMISSION_PROHIBITED</strong>
   </section>;
 }

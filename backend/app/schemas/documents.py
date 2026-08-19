@@ -23,6 +23,7 @@ class DocumentRead(BaseModel):
     file_hash: str | None
     processing_status: ProcessingStatus
     processing_error: str | None
+    ai_post_builder_allowed: bool
     page_count: int | None
     uploaded_at: datetime
     processed_at: datetime | None
@@ -58,6 +59,12 @@ class SearchResult(BaseModel):
     page_end: int | None
     section_title: str | None
     snippet: str
+
+
+class DocumentPostBuilderPolicyUpdate(BaseModel):
+    allowed: bool
+    reviewer_label: str = Field(min_length=1, max_length=100)
+    acknowledgement: bool
 
 
 class ManualSessionCreate(BaseModel):
@@ -117,4 +124,3 @@ class ManualSessionDetail(ManualSessionRead):
 class CommandExplanationRequest(BaseModel):
     command: str = Field(min_length=1, max_length=20)
     context: str = Field(default="", max_length=2000)
-

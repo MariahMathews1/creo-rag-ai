@@ -1,6 +1,6 @@
 # Creo NC Post Assistant
 
-The V1 interface follows the NC programmer workflow: Machines, Documents, verified Translation Examples, G-POST R&D generation, and machine-specific document assistance. Engineering internals remain available through progressive disclosure.
+The interface follows the post-engineering workflow: Machines, Documents, AI-assisted Post Builder, Historical Post Examples, and machine-specific document assistance. Engineering internals remain available through progressive disclosure.
 
 Start with [the V1 product workflow](docs/v1-product-workflow.md), [screen map](docs/v1-screen-map.md), and [manual test checklist](docs/v1-manual-test-checklist.md).
 
@@ -34,7 +34,7 @@ used to operate machinery.
 
 ## 1. Project status
 
-This repository contains a working proof of concept through Phase 10:
+This repository contains a working proof of concept through the Post Builder governance pivot:
 
 | Phase | Capability | Current state |
 | --- | --- | --- |
@@ -49,28 +49,29 @@ This repository contains a working proof of concept through Phase 10:
 | Phase 7 preparation | Verified CL/G-code translation dataset architecture | Documented; runtime deferred |
 | Phase 8 | Governed paired translation dataset, alignment review, and explorer | Implemented |
 | Phase 9 | Canvas toolpath visualization and visual traceability | Implemented |
-| Phase 10 | Controlled Azure OpenAI provider and internal translation retrieval | Implemented; mock default |
+| Phase 10 | Controlled Azure OpenAI translation experiment | Retired; CL/NCL provider access prohibited |
+| Phase 11 | Machine-level AI-assisted Post Builder boundary and review workflow | Implemented; mock default |
 
 This is not production software. Authentication, authorization, enterprise
 document control, encrypted program storage, formal electronic signatures,
 malware scanning, qualified simulation integration, and full CNC semantics are
 outside the current proof-of-concept boundary.
 
-### Revised R&D Direction — CL/G-Code Translation Learning
+### Current R&D direction — AI-assisted post development
 
-The primary research hypothesis is now that site-specific Creo CL/NCL → G-code behavior should be learned and retrieved from **verified historical CL/G-code pairs** for the exact machine and post context. Technical manuals remain important supporting evidence for documented syntax, capability, parameters, and limits, but they do not by themselves describe the organization's actual post output.
+The current hypothesis is that AI may help post engineers develop machine-specific post rules from approved machine profiles and approved machine/controller documentation. AI operates only during post development. Every suggestion remains a cited draft until qualified engineering review and deterministic validation.
 
-Machine-profile revisions remain authoritative exact-machine context. Deterministic parsers and validation rules remain authoritative checks on every future candidate. Manual Assistant remains internal document Q&A, not a model that learns the post processor. The existing G-POST Generator remains an R&D configuration, mapping, and deterministic-preview tool and may later consume historical translation evidence separately from manual evidence.
+CL/NCL, part geometry, coordinates, toolpaths, production programs, and other part-specific data are prohibited from every AI provider context. Historical CL/G-code pairs remain local secondary evidence for regression, deterministic validation, and human behavior review; they are not Post Builder AI context. A legacy consent field cannot override this hard policy.
 
-Azure OpenAI now has a controlled, optional explanation-only provider boundary. The default remains deterministic mock mode; Azure is never contacted unless configured and a user explicitly requests an interpretation or connectivity check. Only verified-successful, exact-machine, explicitly consented TranslationExample excerpts may enter external context. Public-web retrieval, full-program AI G-code generation, automatic G-POST changes, and fine-tuning remain disabled. Production deployment still requires separate organizational security, data-processing, validation, and operational approval.
+The approved runtime is always `Creo CL/NCL -> approved Creo/G-POST -> machine-specific G-code`, with no AI call. Read the [R&D governance pivot](docs/rd-governance-pivot-post-builder.md) and [AI transmission boundary](docs/ai-data-transmission-boundary.md).
 
 ### Current automated verification baseline
 
 At the time of this handoff:
 
 ```text
-Backend: 105 tests passing
-Frontend: 53 tests passing
+Backend: 117 tests passing (85% statement coverage)
+Frontend: 58 tests passing
 Frontend TypeScript check: passing
 Frontend production build: passing
 Database migration head: 20260814_01
@@ -533,14 +534,15 @@ docker compose down -v
 | `OPENAI_BASE_URL` | OpenAI API URL | Reserved provider boundary |
 | `OPENAI_CHAT_MODEL` | empty | Optional future provider configuration |
 | `OPENAI_EMBEDDING_MODEL` | empty | Optional future provider configuration |
-| `TRANSLATION_AI_PROVIDER` | `mock` | `disabled`, `mock`, or explicit `azure_openai` |
+| `POST_BUILDER_AI_PROVIDER` | `mock` | Machine-level post drafting: `disabled`, `mock`, or explicit `azure_openai` |
+| `TRANSLATION_AI_PROVIDER` | `mock` | Legacy compatibility only; CL/NCL invocation is always prohibited |
 | `AZURE_OPENAI_ENDPOINT` | empty | Server-only approved Azure resource endpoint |
 | `AZURE_OPENAI_DEPLOYMENT` | empty | Approved Azure model deployment |
 | `AZURE_OPENAI_MODEL` | empty | Optional safe display/audit model identifier |
 | `AZURE_OPENAI_AUTH_MODE` | `entra_id` | Entra/managed identity preferred; `api_key` fallback |
 | `AZURE_OPENAI_API_KEY` | empty | Optional server-only fallback; never sent to frontend or persisted |
-| `TRANSLATION_AI_TIMEOUT_SECONDS` | `20` | External explanation timeout |
-| `TRANSLATION_AI_MAX_RETRIES` | `2` | Transient SDK retry limit |
+| `TRANSLATION_AI_TIMEOUT_SECONDS` | `20` | Shared legacy Azure transport timeout |
+| `TRANSLATION_AI_MAX_RETRIES` | `2` | Shared transient SDK retry limit |
 | `DOCUMENT_CHUNK_SIZE` | `900` | Character target |
 | `DOCUMENT_CHUNK_OVERLAP` | `150` | Must be smaller than chunk size |
 | `RETRIEVAL_TOP_K` | `6` | Manual-assistant retrieval count |
@@ -1491,13 +1493,21 @@ G-POST V1 uses shared configuration templates as the source of truth. CL/NCL map
 - [Program comparison](docs/program-comparison.md)
 - [Phase 6 audit](docs/phase-6-audit.md)
 - [Phase 6 manual checklist](docs/phase-6-manual-test-checklist.md)
-- [Revised R&D translation strategy](docs/rd-translation-strategy.md)
+- [Current R&D governance pivot: Post Builder](docs/rd-governance-pivot-post-builder.md)
+- [Phase 11 post section drafting](docs/phase11-post-section-drafting.md)
+- [Post section domain model](docs/post-section-domain-model.md)
+- [Post Builder evidence retrieval](docs/post-builder-evidence-retrieval.md)
+- [Post Builder AI context boundary](docs/post-builder-ai-context.md)
+- [Post rule review workflow](docs/post-rule-review-workflow.md)
+- [Post Builder governance tests](docs/post-builder-governance-tests.md)
+- [Phase 11 manual checklist](docs/phase11-manual-test-checklist.md)
+- [Historical R&D translation strategy](docs/rd-translation-strategy.md)
 - [R&D hypothesis and metrics](docs/rd-hypothesis.md)
 - [Translation dataset conceptual design](docs/translation-dataset-design.md)
 - [Translation Explorer concept](docs/translation-explorer-concept.md)
 - [Toolpath visualization strategy](docs/toolpath-visualization-strategy.md)
-- [Future Azure OpenAI integration plan](docs/azure-openai-integration-plan.md)
-- [Azure OpenAI translation provider](docs/azure-openai-provider.md)
+- [Azure OpenAI Post Builder integration plan](docs/azure-openai-integration-plan.md)
+- [Historical Azure OpenAI translation provider](docs/azure-openai-provider.md)
 - [AI data-transmission boundary](docs/ai-data-transmission-boundary.md)
 - [Phase 10 manual checklist](docs/phase10-manual-test-checklist.md)
 - [Existing-post vs AI benchmark design](docs/ai-post-benchmark-design.md)

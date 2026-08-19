@@ -14,6 +14,8 @@ from app.api.translation_ai import router as translation_ai_router
 from app.api.profile_extraction import router as profile_extraction_router
 from app.api.program_standards import router as program_standards_router
 from app.api.gpost import router as gpost_router
+from app.api.post_builder_ai import router as post_builder_ai_router
+from app.api.post_sections import router as post_sections_router
 from app.core.config import get_settings
 from app.db.alembic import upgrade_database
 from app.db.session import engine
@@ -52,6 +54,8 @@ app.include_router(translation_ai_router, prefix=settings.api_prefix)
 app.include_router(profile_extraction_router, prefix=settings.api_prefix)
 app.include_router(program_standards_router, prefix=settings.api_prefix)
 app.include_router(gpost_router, prefix=settings.api_prefix)
+app.include_router(post_builder_ai_router, prefix=settings.api_prefix)
+app.include_router(post_sections_router, prefix=settings.api_prefix)
 
 
 @app.get("/api/health", tags=["health"])

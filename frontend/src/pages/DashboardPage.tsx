@@ -41,8 +41,8 @@ export function DashboardPage() {
       <PageHeader
         eyebrow="NC programmer workspace"
         title="Dashboard"
-        description="Start with a machine, add its references and known translation examples, then generate or review R&D G-code."
-        action={<Link to="/gpost" className="button primary">Generate G-POST Draft</Link>}
+        description="Start with authoritative machine knowledge, then build and review machine-specific post rules before they enter an approved Creo/G-POST runtime."
+        action={<Link to="/gpost" className="button primary">Open Post Builder</Link>}
       />
       <SafetyBanner />
       {loading && <p className="loading" role="status">Loading dashboard…</p>}
@@ -50,12 +50,12 @@ export function DashboardPage() {
       <div className="dashboard-stats">
         <div><small>Machines</small><strong>{profiles.length}</strong><Link to="/machines">View machines →</Link></div>
         <div><small>Documents</small><strong>{documents.length}</strong><Link to="/documents">View documents →</Link></div>
-        <div><small>Verified Translation Examples</small><strong>{translationSummary?.verified ?? 0}</strong><Link to="/translations">View examples →</Link></div>
-        <div><small>G-POST Drafts</small><strong>{drafts.length}</strong><Link to="/gpost">View drafts →</Link></div>
+        <div><small>Posts in Progress</small><strong>{drafts.filter((item) => ["draft", "under_review", "review_required"].includes(item.status)).length}</strong><Link to="/gpost">Continue building →</Link></div>
+        <div><small>Needs Attention</small><strong>{drafts.filter((item) => item.status === "review_required").length + count("blocking")}</strong><Link to="/gpost">Resolve issues →</Link></div>
+        <div><small>Reviewed R&amp;D Posts</small><strong>{drafts.filter((item) => item.status === "validated_for_rnd").length}</strong><Link to="/gpost">View reviewed posts →</Link></div>
         <div><small>Recent G-code Reviews</small><strong>{projects.length}</strong><Link to="/g-code-review">Start review →</Link></div>
-        <div className="blocking-stat"><small>Open Blocking Findings</small><strong>{count("blocking")}</strong><span>Require review</span></div>
       </div>
-      <section className="dashboard-actions panel" aria-label="Quick actions"><h2>Quick Actions</h2><div><Link className="button secondary" to="/machines">+ Add Machine</Link><Link className="button secondary" to="/documents">Upload Documents</Link><Link className="button secondary" to="/translations">Add Translation Pair</Link><Link className="button secondary" to="/g-code-review">Review Existing G-code</Link></div></section>
+      <section className="dashboard-actions panel" aria-label="Quick actions"><h2>Quick Actions</h2><div><Link className="button secondary" to="/machines">+ Add Machine</Link><Link className="button secondary" to="/documents">Upload Machine Documents</Link><Link className="button secondary" to="/gpost">Create Post</Link><Link className="button secondary" to="/g-code-review">Review G-code</Link></div></section>
       <div className="dashboard-grid">
         <section className="panel recent-panel">
           <header><div><span className="eyebrow">Recent activity</span><h2>Recent G-code Reviews</h2></div><Link to="/g-code-review">New review</Link></header>
@@ -69,7 +69,7 @@ export function DashboardPage() {
             const percent = findings.length ? (value / findings.length) * 100 : 0;
             return <div className="distribution-row" key={severity}><div><span className={`dot ${severity}`} />{severity}<strong>{value}</strong></div><div className="bar"><i className={severity} style={{ width: `${percent}%` }} /></div></div>;
           })}
-          <p className="rule-note"><strong>Deterministic first.</strong> Findings come from configured rules. AI explanations are always labeled advisory and never change results.</p>
+          <p className="rule-note"><strong>Deterministic first.</strong> Findings come from configured rules. AI may assist with draft post development only and never receives CL/NCL, toolpaths, geometry, or part data.</p>
         </section>
       </div>
     </section>

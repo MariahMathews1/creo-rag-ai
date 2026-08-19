@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     openai_chat_model: str = ""
     openai_embedding_model: str = ""
     translation_ai_provider: str = "mock"
+    post_builder_ai_provider: str = "mock"
     azure_openai_endpoint: str = ""
     azure_openai_deployment: str = ""
     azure_openai_model: str = ""
