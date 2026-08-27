@@ -5,7 +5,6 @@ const links = [
   { to: "/machines", label: "Machines", glyph: "◆" },
   { to: "/documents", label: "Documents", glyph: "▤" },
   { to: "/gpost", label: "Post Builder", glyph: "⚙" },
-  { to: "/translations", label: "Historical Post Examples", glyph: "⇄" },
   { to: "/machine-assistant", label: "Machine Assistant", glyph: "?" },
 ];
 
@@ -33,7 +32,6 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
-        <details className="advanced-nav"><summary>Advanced Tools</summary><NavLink to="/g-code-review">G-code Review</NavLink></details>
         <div className="sidebar-footer">
           <span className="status-dot" />
           Local proof of concept

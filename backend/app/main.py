@@ -16,6 +16,7 @@ from app.api.program_standards import router as program_standards_router
 from app.api.gpost import router as gpost_router
 from app.api.post_builder_ai import router as post_builder_ai_router
 from app.api.post_sections import router as post_sections_router
+from app.api.post_records import router as post_records_router
 from app.core.config import get_settings
 from app.db.alembic import upgrade_database
 from app.db.session import engine
@@ -56,6 +57,7 @@ app.include_router(program_standards_router, prefix=settings.api_prefix)
 app.include_router(gpost_router, prefix=settings.api_prefix)
 app.include_router(post_builder_ai_router, prefix=settings.api_prefix)
 app.include_router(post_sections_router, prefix=settings.api_prefix)
+app.include_router(post_records_router, prefix=settings.api_prefix)
 
 
 @app.get("/api/health", tags=["health"])

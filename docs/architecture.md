@@ -1,5 +1,11 @@
 # Architecture notes
 
+Pre-Azure validation adds `ValidationPolicy`, extended `PostValidationRecord`, `ValidationFinding`, and `GPostDiagnostic`. The local `GPostDiagnosticParser` normalizes supported listing messages without AI or full-file persistence. VERICUT remains external and is represented only through manual handoff and validation metadata.
+
+## Post Record engineering layer
+
+The primary product architecture is an additive Post Record layer over the existing `GPostDraft` lineage. `MachineKnowledgeFact`, `OFGSetting`, `SiteStandard`, `PostStandardApplication`, `CustomLogicItem`, `OpenQuestion`, and `PostValidationRecord` provide manual-first engineering state. Phase 11 `PostSectionDraft`/`PostRuleDraft` data remains for compatibility and is classified independently from the primary workflow. Whole-record versions embed a Post Development Package snapshot. Azure is not required.
+
 The current architecture is retained, but the primary R&D direction is now AI-assisted post development: immutable machine-profile revisions provide authoritative context; approved machine/controller excerpts provide cited technical evidence; reviewed post rules and deterministic validation remain authoritative; and `PostBuilderAIProvider` produces draft machine-level suggestions only. Historical CL/G-code pairs remain local secondary validation evidence. See [R&D governance pivot](rd-governance-pivot-post-builder.md).
 
 The proof of concept is a monorepo with two deployable processes:

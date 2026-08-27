@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -182,6 +182,7 @@ class PostRuleDraft(Base):
     assumptions_json: Mapped[list] = mapped_column(JSON, default=list)
     warnings_json: Mapped[list] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(40), default="needs_review", index=True)
+    engineering_classification: Mapped[str] = mapped_column(String(30), default="UNKNOWN", index=True)
     review_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewer_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -189,3 +190,198 @@ class PostRuleDraft(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
     section_draft: Mapped[PostSectionDraft] = relationship(back_populates="rules")
+
+
+class MachineKnowledgeFact(Base):
+    __tablename__ = "machine_knowledge_facts"
+    __table_args__ = (UniqueConstraint("post_record_id", "fact_key", name="uq_machine_fact_record_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_record_id: Mapped[int] = mapped_column(ForeignKey("gpost_drafts.id"), index=True)
+    category: Mapped[str] = mapped_column(String(60), index=True)
+    fact_key: Mapped[str] = mapped_column(String(100), index=True)
+    name: Mapped[str] = mapped_column(String(180))
+    value_json: Mapped[object | None] = mapped_column(JSON, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="unknown", index=True)
+    source_document_id: Mapped[int | None] = mapped_column(ForeignKey("source_documents.id"), nullable=True)
+    source_label: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    source_location: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    reviewer: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class OFGSetting(Base):
+    __tablename__ = "ofg_settings"
+    __table_args__ = (UniqueConstraint("post_record_id", "setting_key", name="uq_ofg_setting_record_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_record_id: Mapped[int] = mapped_column(ForeignKey("gpost_drafts.id"), index=True)
+    category: Mapped[str] = mapped_column(String(80), index=True)
+    subsection: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    setting_key: Mapped[str] = mapped_column(String(120), index=True)
+    display_name: Mapped[str] = mapped_column(String(180))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    value_json: Mapped[object | None] = mapped_column(JSON, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="unmapped", index=True)
+    source_machine_fact_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    source_document_evidence_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    site_standard_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    requires_custom_logic: Mapped[bool] = mapped_column(Boolean, default=False)
+    custom_logic_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ofg_menu_path: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    ofg_menu_path_status: Mapped[str] = mapped_column(String(40), default="not_verified")
+    relevance_class: Mapped[str] = mapped_column(String(20), default="core")
+    relevance_label: Mapped[str] = mapped_column(String(30), default="required_for_post")
+    is_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
+    user_selected: Mapped[bool] = mapped_column(Boolean, default=False)
+    source_type: Mapped[str] = mapped_column(String(50), default="Unknown")
+    source_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    structured_value_json: Mapped[object | None] = mapped_column(JSON, nullable=True)
+    code_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    reviewer: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class SiteStandard(Base):
+    __tablename__ = "site_standards"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(180), index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scope: Mapped[str] = mapped_column(String(40), index=True)
+    applicable_machine_types_json: Mapped[list] = mapped_column(JSON, default=list)
+    applicable_controller_families_json: Mapped[list] = mapped_column(JSON, default=list)
+    applicable_machine_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    category: Mapped[str] = mapped_column(String(80), index=True)
+    rule: Mapped[str] = mapped_column(Text)
+    validation_requirements_json: Mapped[list] = mapped_column(JSON, default=list)
+    source: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="needs_review", index=True)
+    reviewer: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    effective_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class PostStandardApplication(Base):
+    __tablename__ = "post_standard_applications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_record_id: Mapped[int] = mapped_column(ForeignKey("gpost_drafts.id"), index=True)
+    site_standard_id: Mapped[int] = mapped_column(ForeignKey("site_standards.id"), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="applied", index=True)
+    conflict_status: Mapped[str] = mapped_column(String(30), default="none", index=True)
+    conflict_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewer: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class CustomLogicItem(Base):
+    __tablename__ = "custom_logic_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_record_id: Mapped[int] = mapped_column(ForeignKey("gpost_drafts.id"), index=True)
+    name: Mapped[str] = mapped_column(String(180))
+    category: Mapped[str] = mapped_column(String(80), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    implementation_type: Mapped[str] = mapped_column(String(60), default="FIL / CIMFIL")
+    status: Mapped[str] = mapped_column(String(30), default="identified", index=True)
+    evidence_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    site_standard_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    source_format: Mapped[str] = mapped_column(String(120), default="Site verification required")
+    source_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    reviewer: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class OpenQuestion(Base):
+    __tablename__ = "post_open_questions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_record_id: Mapped[int] = mapped_column(ForeignKey("gpost_drafts.id"), index=True)
+    question_type: Mapped[str] = mapped_column(String(60), index=True)
+    title: Mapped[str] = mapped_column(String(220))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity: Mapped[str] = mapped_column(String(30), default="warning", index=True)
+    related_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    related_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    owner: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="open", index=True)
+    resolution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class PostValidationRecord(Base):
+    __tablename__ = "post_validation_records"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_record_id: Mapped[int] = mapped_column(ForeignKey("gpost_drafts.id"), index=True)
+    post_version_id: Mapped[int | None] = mapped_column(ForeignKey("gpost_draft_versions.id"), nullable=True, index=True)
+    validation_type: Mapped[str] = mapped_column(String(60), index=True)
+    name: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    performed_by: Mapped[str] = mapped_column(String(100))
+    performed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    environment: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    result: Mapped[str] = mapped_column(String(40), index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attachment_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    external_tool: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    external_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    test_program_name: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    findings_count: Mapped[int] = mapped_column(Integer, default=0)
+    blocking_findings_count: Mapped[int] = mapped_column(Integer, default=0)
+    references_json: Mapped[list] = mapped_column(JSON, default=list)
+    ai_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class ValidationFinding(Base):
+    __tablename__ = "post_validation_findings"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    validation_record_id: Mapped[int] = mapped_column(ForeignKey("post_validation_records.id"), index=True)
+    severity: Mapped[str] = mapped_column(String(30), default="WARNING", index=True)
+    category: Mapped[str] = mapped_column(String(80), default="Engineering")
+    title: Mapped[str] = mapped_column(String(220))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    related_ofg_setting_id: Mapped[int | None] = mapped_column(ForeignKey("ofg_settings.id"), nullable=True)
+    related_custom_logic_id: Mapped[int | None] = mapped_column(ForeignKey("custom_logic_items.id"), nullable=True)
+    related_site_standard_id: Mapped[int | None] = mapped_column(ForeignKey("site_standards.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="Open", index=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class ValidationPolicy(Base):
+    __tablename__ = "post_validation_policies"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_record_id: Mapped[int] = mapped_column(ForeignKey("gpost_drafts.id"), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(180), default="Default R&D Validation")
+    required_validation_types_json: Mapped[list] = mapped_column(JSON, default=list)
+    optional_validation_types_json: Mapped[list] = mapped_column(JSON, default=list)
+    source: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    reviewer: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class GPostDiagnostic(Base):
+    __tablename__ = "gpost_diagnostics"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    validation_record_id: Mapped[int] = mapped_column(ForeignKey("post_validation_records.id"), index=True)
+    severity: Mapped[str] = mapped_column(String(20), default="UNKNOWN", index=True)
+    code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    message: Mapped[str] = mapped_column(Text)
+    line_reference: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_reference: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    custom_logic_reference_id: Mapped[int | None] = mapped_column(ForeignKey("custom_logic_items.id"), nullable=True)
+    raw_excerpt: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

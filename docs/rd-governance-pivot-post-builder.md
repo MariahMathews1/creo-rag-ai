@@ -1,5 +1,9 @@
 # R&D governance pivot: AI-assisted Post Builder
 
+## Post Record information-architecture update
+
+The user-facing product no longer treats independent AI-generated sections as its primary model. The governed system of record is a Post Record: reviewed Machine Knowledge, OFG requirements, Site Standards, Custom Logic, Open Questions, validation records, sources, and versions. AI remains optional, explicit, machine-document scoped, and subordinate to engineer review. Phase 11 section drafts are retained as compatible internal data.
+
 ## Current hypothesis
 
 > A controlled AI assistant may reduce the effort required to develop and maintain machine-specific post-processor configurations by combining approved machine-profile data, structured machine/controller documentation, deterministic extraction, and reviewed machine-level programming conventions—without exposing part-specific CL/NCL or using AI during runtime post processing.
@@ -28,6 +32,8 @@ Approved machine profile + approved machine-level document excerpts
 ```
 
 CL/NCL, part geometry, features, fixtures, coordinates, toolpaths, machining sequences, production programs, and part identifiers cannot enter the provider context. This is enforced centrally before provider selection and again at the external provider boundary.
+
+CAD models, STEP/IGES/Creo part geometry, customer designs, VERICUT geometry/project data, test-program content, and part-specific diagnostic listings are also prohibited. Local diagnostic parsing and every validation stage operate without AI.
 
 ## Evidence hierarchy
 

@@ -24,6 +24,9 @@ import type {
   TranslationExplanationResponse, TranslationAIInvocation,
   PostBuilderProviderStatus, PostBuilderSectionResponse,
   PostBuilderEvidence, PostRuleDraft, PostSectionCompare, PostSectionDraft, PostSectionReadiness,
+  CustomLogicItem, MachineKnowledgeFact, OFGSetting, PostOpenQuestion, PostRecordSummary,
+  GPostDiagnostic, PostStandardApplication, PostValidationRecord, SiteStandard,
+  ValidationFinding, ValidationHandoff, ValidationPolicy, ValidationTimeline,
 } from "../types";
 
 const API_BASE_URL =
@@ -63,6 +66,37 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getPostRecordSummary: (id: number) => request<PostRecordSummary>(`/post-records/${id}/summary`),
+  listMachineKnowledge: (id: number) => request<MachineKnowledgeFact[]>(`/post-records/${id}/machine-knowledge`),
+  updateMachineKnowledge: (id: number, itemId: number, payload: Record<string, unknown>) => request<MachineKnowledgeFact>(`/post-records/${id}/machine-knowledge/${itemId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  listOFGSettings: (id: number, includeAdvanced = false) => request<OFGSetting[]>(`/post-records/${id}/ofg-settings?include_advanced=${includeAdvanced}`),
+  createOFGSetting: (id: number, payload: Record<string, unknown>) => request<OFGSetting>(`/post-records/${id}/ofg-settings`, { method: "POST", body: JSON.stringify(payload) }),
+  updateOFGSetting: (id: number, itemId: number, payload: Record<string, unknown>) => request<OFGSetting>(`/post-records/${id}/ofg-settings/${itemId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  listSiteStandards: () => request<SiteStandard[]>("/site-standards"),
+  createSiteStandard: (payload: Record<string, unknown>) => request<SiteStandard>("/site-standards", { method: "POST", body: JSON.stringify(payload) }),
+  listPostStandards: (id: number) => request<PostStandardApplication[]>(`/post-records/${id}/site-standards`),
+  applySiteStandard: (id: number, payload: Record<string, unknown>) => request<PostStandardApplication>(`/post-records/${id}/site-standards`, { method: "POST", body: JSON.stringify(payload) }),
+  updatePostStandard: (id: number, itemId: number, payload: Record<string, unknown>) => request<PostStandardApplication>(`/post-records/${id}/site-standards/${itemId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  listCustomLogic: (id: number) => request<CustomLogicItem[]>(`/post-records/${id}/custom-logic`),
+  createCustomLogic: (id: number, payload: Record<string, unknown>) => request<CustomLogicItem>(`/post-records/${id}/custom-logic`, { method: "POST", body: JSON.stringify(payload) }),
+  updateCustomLogic: (id: number, itemId: number, payload: Record<string, unknown>) => request<CustomLogicItem>(`/post-records/${id}/custom-logic/${itemId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  listPostQuestions: (id: number) => request<PostOpenQuestion[]>(`/post-records/${id}/open-questions`),
+  createPostQuestion: (id: number, payload: Record<string, unknown>) => request<PostOpenQuestion>(`/post-records/${id}/open-questions`, { method: "POST", body: JSON.stringify(payload) }),
+  updatePostQuestion: (id: number, itemId: number, payload: Record<string, unknown>) => request<PostOpenQuestion>(`/post-records/${id}/open-questions/${itemId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  listPostValidations: (id: number) => request<PostValidationRecord[]>(`/post-records/${id}/validation-records`),
+  createPostValidation: (id: number, payload: Record<string, unknown>) => request<PostValidationRecord>(`/post-records/${id}/validation-records`, { method: "POST", body: JSON.stringify(payload) }),
+  listValidationFindings: (id: number) => request<ValidationFinding[]>(`/post-records/${id}/validation-findings`),
+  createValidationFinding: (id: number, validationId: number, payload: Record<string, unknown>) => request<ValidationFinding>(`/post-records/${id}/validation-records/${validationId}/findings`, { method: "POST", body: JSON.stringify(payload) }),
+  updateValidationFinding: (id: number, findingId: number, payload: Record<string, unknown>) => request<ValidationFinding>(`/post-records/${id}/validation-findings/${findingId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  findingToOpenQuestion: (id: number, findingId: number) => request<PostOpenQuestion>(`/post-records/${id}/validation-findings/${findingId}/open-question`, { method: "POST" }),
+  getValidationPolicy: (id: number) => request<ValidationPolicy>(`/post-records/${id}/validation-policy`),
+  updateValidationPolicy: (id: number, payload: Record<string, unknown>) => request<ValidationPolicy>(`/post-records/${id}/validation-policy`, { method: "PUT", body: JSON.stringify(payload) }),
+  getValidationTimeline: (id: number) => request<ValidationTimeline>(`/post-records/${id}/validation-timeline`),
+  getValidationHandoff: (id: number) => request<ValidationHandoff>(`/post-records/${id}/validation-handoff`),
+  listGPostDiagnostics: (id: number) => request<GPostDiagnostic[]>(`/post-records/${id}/diagnostics`),
+  parseGPostDiagnostics: (id: number, validationId: number, listingText: string, fileName?: string) => request<GPostDiagnostic[]>(`/post-records/${id}/validation-records/${validationId}/diagnostics/parse`, { method: "POST", body: JSON.stringify({ listing_text: listingText, file_name: fileName || null, create_findings: true }) }),
+  postDevelopmentPackageUrl: (id: number, format: "markdown" | "json" | "csv") => `${API_BASE_URL}/post-records/${id}/export?format=${format}`,
+  comparePostRecords: (id: number, otherId: number) => request<Record<string, unknown>>(`/post-records/${id}/compare/${otherId}`),
   getPostSectionReadiness: (draftId: number) => request<PostSectionReadiness[]>(`/post-builder/${draftId}/readiness`),
   getAssembledPost: (draftId: number) => request<import("../types").AssembledPostDraft>(`/post-builder/${draftId}/assembled`),
   listPostSections: (draftId: number) => request<PostSectionDraft[]>(`/post-builder/${draftId}/sections`),
@@ -80,7 +114,8 @@ export const api = {
   explainTranslation: (retrieval: TranslationRetrievalRequest, exampleIds: number[]) => request<TranslationExplanationResponse>("/ai/translation/explain", { method: "POST", body: JSON.stringify({ retrieval, example_ids: exampleIds }) }),
   listTranslationAIInvocations: (machineId?: number) => request<TranslationAIInvocation[]>(`/ai/translation/invocations${machineId ? `?machine_profile_id=${machineId}` : ""}`),
   setTranslationAIConsent: (exampleId: number, allowed: boolean, reviewerLabel: string, acknowledgement: boolean, note?: string) => request<TranslationExample>(`/translations/${exampleId}/ai-processing-consent`, { method: "POST", body: JSON.stringify({ allowed, reviewer_label: reviewerLabel, acknowledgement, note: note || null }) }),
-  listProfiles: () => request<MachineProfile[]>("/machines"),
+  listProfiles: (includeArchived = false) => request<MachineProfile[]>(`/machines${includeArchived ? "?include_archived=true" : ""}`),
+  getProfile: (id: number) => request<MachineProfile>(`/machines/${id}`),
   createProfile: (profile: MachineProfileInput) =>
     request<MachineProfile>("/machines", {
       method: "POST",
@@ -93,6 +128,8 @@ export const api = {
     }),
   deleteProfile: (id: number) =>
     request<void>(`/machines/${id}`, { method: "DELETE" }),
+  archiveProfile: (id: number) => request<MachineProfile>(`/machines/${id}/archive`, { method: "POST" }),
+  restoreProfile: (id: number) => request<MachineProfile>(`/machines/${id}/restore`, { method: "POST" }),
   listProjects: () => request<AnalysisProject[]>("/analyses"),
   getProject: (id: number) => request<AnalysisProject>(`/analyses/${id}`),
   createProject: (payload: {

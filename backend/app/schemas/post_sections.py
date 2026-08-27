@@ -79,6 +79,7 @@ class PostRuleDraftRead(BaseModel):
     assumptions_json: list
     warnings_json: list
     status: str
+    engineering_classification: str = "UNKNOWN"
     review_reason: str | None
     reviewer_label: str | None
     reviewed_at: datetime | None

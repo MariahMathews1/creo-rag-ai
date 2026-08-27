@@ -1,24 +1,53 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import { PageHeader } from "../components/PageHeader";
 import { ActionMenu } from "../components/ActionMenu";
+import { PageHeader } from "../components/PageHeader";
 import { MachineProfileForm } from "../features/machines/MachineProfileForm";
-import type { MachineProfile, MachineProfileInput } from "../types";
+import type { GPostDraft, MachineKnowledgeFact, MachineProfile, MachineProfileInput, SourceDocument } from "../types";
+
+const pretty = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+const isDemo = (profile: MachineProfile) => /\b(demo|fictional|test)\b/i.test(`${profile.name} ${profile.manufacturer} ${profile.notes || ""}`);
+type LifecycleFilter = "active" | "archived" | "all";
+function knowledgeLabel(facts: MachineKnowledgeFact[]) {
+  if (!facts.length) return "No Knowledge";
+  const missing = facts.filter((fact) => fact.status === "unknown").length;
+  if (missing) return `Needs ${missing} Fact${missing === 1 ? "" : "s"}`;
+  if (facts.some((fact) => ["needs_review", "conflicting"].includes(fact.status))) return "Needs Review";
+  return "Ready";
+}
 
 export function MachineProfilesPage() {
+  const navigate = useNavigate();
   const [profiles, setProfiles] = useState<MachineProfile[]>([]);
   const [editing, setEditing] = useState<MachineProfile | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [postRecords, setPostRecords] = useState<Record<number, GPostDraft[]>>({});
+  const [documents, setDocuments] = useState<Record<number, SourceDocument[]>>({});
+  const [knowledge, setKnowledge] = useState<Record<number, MachineKnowledgeFact[]>>({});
+  const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>("active");
+  const [deleting, setDeleting] = useState<MachineProfile | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const load = () => {
     setLoading(true);
     setError("");
     return api
-      .listProfiles()
-      .then(setProfiles)
+      .listProfiles(true)
+      .then(async (items) => {
+        setProfiles(items);
+        const related = await Promise.all(items.map(async (profile) => {
+          const [posts, profileDocuments] = await Promise.all([api.listGPostDrafts(profile.id), api.listDocuments(profile.id)]);
+          const current = posts.find((post) => !["superseded", "archived"].includes(post.status));
+          const facts = current ? await api.listMachineKnowledge(current.id).catch(() => []) : [];
+          return { id: profile.id, posts, documents: profileDocuments, facts };
+        }));
+        setPostRecords(Object.fromEntries(related.map((item) => [item.id, item.posts])));
+        setDocuments(Object.fromEntries(related.map((item) => [item.id, item.documents])));
+        setKnowledge(Object.fromEntries(related.map((item) => [item.id, item.facts])));
+      })
       .catch((cause) =>
         setError(cause instanceof Error ? cause.message : "Unable to load profiles."),
       )
@@ -28,63 +57,64 @@ export function MachineProfilesPage() {
 
   async function save(value: MachineProfileInput) {
     if (editing) await api.updateProfile(editing.id, value);
-    else await api.createProfile(value);
+    else {
+      const created = await api.createProfile(value);
+      navigate(`/machines/${created.id}`);
+      return;
+    }
     setShowForm(false);
     setEditing(null);
     await load();
   }
 
-  async function remove(profile: MachineProfile) {
-    if (!window.confirm(`Delete “${profile.name}” and its related analyses?`)) return;
-    try {
-      await api.deleteProfile(profile.id);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to delete profile.");
-    }
+  async function archive(profile: MachineProfile) {
+    setError("");
+    try { await api.archiveProfile(profile.id); setDeleting(null); await load(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to archive machine."); }
+  }
+
+  async function restore(profile: MachineProfile) {
+    setError("");
+    try { await api.restoreProfile(profile.id); await load(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to restore machine."); }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setDeleteError("");
+    try { await api.deleteProfile(deleting.id); setDeleting(null); await load(); }
+    catch (cause) { setDeleteError(cause instanceof Error ? cause.message : "Unable to delete machine."); }
   }
 
   if (showForm) {
     return (
       <section className="page">
-        <PageHeader eyebrow="Machine configuration" title={editing ? "Edit machine" : "Add machine"} description="Enter the machine, controller, motion limits, and post-related behavior used for generation and review." />
-        <MachineProfileForm profile={editing} onSubmit={save} onCancel={() => { setShowForm(false); setEditing(null); }} />
+        <PageHeader eyebrow="Machine configuration" title={editing ? "Edit Machine" : "Add Machine"} description="Enter the machine and controller identity used throughout the engineering workflow." />
+        <MachineProfileForm simple profile={editing} onSubmit={save} onCancel={() => { setShowForm(false); setEditing(null); }} />
       </section>
     );
   }
+  const deletionBlocked = Boolean(deleting && ((postRecords[deleting.id]?.length ?? 0) > 0 || deleteError.includes("cannot be deleted")));
 
   return (
     <section className="page">
       <PageHeader
         eyebrow="Configuration"
         title="Machines"
-        description="Everything starts with the CNC machine. Store the controller, travel, limits, and post-related behavior here."
+        description="Machine identity, controller context, reviewed knowledge, source documents, and associated Post Records."
         action={<button className="button primary" onClick={() => setShowForm(true)}>+ Add Machine</button>}
       />
       {error && <p className="form-error" role="alert">{error}</p>}
-      {loading ? <p className="loading" role="status">Loading machine profiles…</p> : profiles.length === 0 ? (
+      <div className="machine-lifecycle-filter" role="group" aria-label="Machine status filter">{(["active", "archived", "all"] as LifecycleFilter[]).map((value) => <button key={value} type="button" className={lifecycleFilter === value ? "active" : ""} aria-pressed={lifecycleFilter === value} onClick={() => setLifecycleFilter(value)}>{pretty(value)}</button>)}</div>
+      {loading ? <p className="loading" role="status">Loading machine profiles…</p> : profiles.filter((profile) => lifecycleFilter === "all" || (lifecycleFilter === "archived" ? Boolean(profile.archived_at) : !profile.archived_at)).length === 0 ? (
         <div className="empty-state"><span>◆</span><h2>No machines yet</h2><p>Add a machine before generating or reviewing G-code.</p><button className="button primary" onClick={() => setShowForm(true)}>Add Machine</button></div>
-      ) : (
-        <div className="profile-list">
-          {profiles.map((profile) => (
-            <article className="profile-card" key={profile.id}>
-              {(() => { const missing = [{ label: "X travel", absent: profile.x_min == null || profile.x_max == null }, { label: "Z travel", absent: profile.z_min == null || profile.z_max == null }, { label: "Spindle limit", absent: profile.max_spindle_rpm == null }].filter((item) => item.absent).map((item) => item.label); return <>
-              <div className="profile-card-head">
-                <div><span className="machine-type">{profile.machine_type}</span><h2>{profile.name}</h2><p>{profile.manufacturer} {profile.model} · {profile.controller_name}</p><div className={`machine-completeness ${missing.length ? "needs-info" : "complete"}`}><strong>{missing.length ? "Needs Information" : "Complete"}</strong>{missing.length > 0 && <small>Missing: {missing.join(" · ")}</small>}</div></div>
-                <div className="card-actions"><Link className="button primary" to={`/gpost?machine=${profile.id}`}>Generate G-POST Draft</Link><Link className="button secondary" to={`/machines/${profile.id}/profile-extraction/new`}>{missing.length ? "Find in Documents" : "Find More Information"}</Link><button className="button secondary" onClick={() => { setEditing(profile); setShowForm(true); }}>Open Machine</button><ActionMenu label="More" items={[{ label: "Edit Machine", onSelect: () => { setEditing(profile); setShowForm(true); } }, { label: "Configuration History", to: `/machines/${profile.id}/revisions` }, { label: "Reference Programs", to: `/machines/${profile.id}/reference-programs` }, { label: "Delete Machine", danger: true, divider: true, onSelect: () => void remove(profile) }]} /></div>
-              </div>
-              <div className="limits-row">
-                <span><small>X travel</small>{profile.x_min ?? "—"} to {profile.x_max ?? "—"}</span>
-                <span><small>Y travel</small>{profile.y_min ?? "—"} to {profile.y_max ?? "—"}</span>
-                <span><small>Z travel</small>{profile.z_min ?? "—"} to {profile.z_max ?? "—"}</span>
-                <span><small>Spindle</small>{profile.max_spindle_rpm?.toLocaleString() ?? "—"} RPM</span>
-                <span><small>Max feed</small>{profile.max_feed_rate?.toLocaleString() ?? "—"}</span>
-              </div>
-              </>; })()}
-            </article>
-          ))}
-        </div>
-      )}
+      ) : <div className="panel table-wrap compact-machine-list"><table><thead><tr><th>Machine</th><th>Type</th><th>Controller</th><th>Documents</th><th>Knowledge</th><th>Posts</th><th>Action</th></tr></thead><tbody>{profiles.filter((profile) => lifecycleFilter === "all" || (lifecycleFilter === "archived" ? Boolean(profile.archived_at) : !profile.archived_at)).map((profile) => { const label = knowledgeLabel(knowledge[profile.id] || []); return <tr className="clickable-machine-row" key={profile.id} tabIndex={0} onClick={() => navigate(`/machines/${profile.id}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") navigate(`/machines/${profile.id}`); }}><td><div className="machine-cell-primary"><strong>{profile.name}</strong>{isDemo(profile) && <span className="demo-badge">DEMO</span>}{profile.archived_at && <span className="archived-badge">ARCHIVED</span>}</div><small>{profile.manufacturer} · {profile.model}</small></td><td><span className="compact-type">{pretty(profile.machine_type)}</span></td><td><span className="compact-controller">{profile.controller_model || profile.controller_name}</span></td><td>{documents[profile.id]?.length ?? 0}</td><td><span className={`knowledge-label ${label === "Ready" ? "ready" : label === "No Knowledge" ? "empty" : "review"}`}>{label}</span></td><td>{postRecords[profile.id]?.length ?? 0}</td><td><div className="machine-row-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><Link className="machine-open-link" to={`/machines/${profile.id}`}>Open →</Link><ActionMenu label={`More actions for ${profile.name}`} triggerLabel="More" items={[
+        { label: "Edit Machine", onSelect: () => { setEditing(profile); setShowForm(true); } },
+        { label: "Create Post", to: `/gpost?machine=${profile.id}` },
+        profile.archived_at ? { label: "Restore Machine", onSelect: () => void restore(profile) } : { label: "Archive Machine", onSelect: () => void archive(profile) },
+        { label: "Delete Machine", danger: true, divider: true, onSelect: () => { setDeleting(profile); setDeleteError(""); } },
+      ]} /></div></td></tr>; })}</tbody></table></div>}
+      {deleting && <div className="confirmation-backdrop" role="presentation"><section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-machine-title"><h2 id="delete-machine-title">Delete “{deleting.name}”?</h2>{(postRecords[deleting.id]?.length ?? 0) > 0 ? <p className="form-error">This machine has {postRecords[deleting.id].length} Post Records and cannot be deleted. Archive it instead or resolve the dependent records.</p> : !deleteError && <p>This permanently deletes the machine profile. This action cannot be undone.</p>}{deleteError && <p className="form-error" role="alert">{deleteError}</p>}<footer><button className="button secondary" onClick={() => setDeleting(null)}>Cancel</button>{deletionBlocked ? <button className="button primary" onClick={() => void archive(deleting)}>Archive Machine</button> : <button className="button danger" onClick={() => void confirmDelete()}>Delete Machine</button>}</footer></section></div>}
     </section>
   );
 }

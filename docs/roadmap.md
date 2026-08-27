@@ -1,5 +1,18 @@
 # Development roadmap
 
+## Pre-Azure Post Record pivot — complete
+
+- Structured Post Record system of record
+- Machine Knowledge → OFG setting traceability
+- Site Standards, Custom Logic, Open Questions, and validation records
+- Versioned Post Development Package snapshots
+- Markdown, R&D JSON, and CSV OFG checklist exports
+- Native G-POST integration remains Not Verified
+
+Stopping recommendation: validate the prototype and site/PTC assumptions before authorizing Azure or native-format development. Do not proceed into speculative collision/formal-verification architecture.
+
+Pre-Azure validation uses manual stage records, configurable site gates, deterministic local G-POST diagnostic parsing, findings, and VERICUT handoff tracking. OpenCASCADE geometry extraction, Separation Logic, voxel verification, AI toolpath rewriting, and custom machine simulation are out of V1 scope and retained only in `research/deferred-spatial-verification.md`.
+
 ## V1 product simplification — complete
 
 Primary navigation, Dashboard, Machines, Documents, Post Builder, Historical Post Examples, Machine Assistant, and G-code Review now follow the post-engineering workflow. See [V1 UI reduction decisions](v1-ui-reduction-decisions.md).

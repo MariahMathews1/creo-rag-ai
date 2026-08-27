@@ -4,9 +4,9 @@
 
 1. Select a machine.
 2. Confirm the post name and current machine-configuration revision.
-3. Review the automatically selected compatible Post Foundation and create the post.
+3. Review the automatically selected Suggested OFG Starting Point and create the post.
 
-Reference Programs are not part of the primary creation flow. FANUC lathe, FANUC mill, Haas mill, and generic foundations are selected from known machine/controller context to prevent normal accidental mismatch.
+Reference Programs are not part of the primary creation flow. FANUC lathe, FANUC mill, Haas mill, and generic OFG initialization references are selected from known machine/controller context to prevent normal accidental mismatch. This is metadata only and does not import a CamLib template.
 
 ## Develop
 

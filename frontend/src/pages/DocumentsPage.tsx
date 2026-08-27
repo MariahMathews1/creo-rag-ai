@@ -68,7 +68,7 @@ export function DocumentsPage() {
   }
 
   return <section className="page">
-    <PageHeader eyebrow="Machine references" title="Documents" description="Upload manuals, specifications, internal procedures, and references for the selected machine." />
+    <PageHeader eyebrow="Machine references" title="Documents" description="Upload and review machine/controller documentation used to build Machine Knowledge." />
     <div className="reference-toolbar">
       <label>Machine<select aria-label="Machine profile" value={machineId} onChange={(event) => setMachineId(event.target.value)}>
         {!machines.length && <option value="">No machine profiles available</option>}
@@ -94,15 +94,10 @@ export function DocumentsPage() {
         <div className="search-results">{results.map((result) => <Link key={result.chunk_id} to={`/documents/${result.document_id}?page=${result.page_start ?? 1}&highlight=${encodeURIComponent(query)}`}><strong>{result.document_title}</strong><small>Page {result.page_start ?? "—"} · {result.section_title ?? "Unlabeled section"}</small><p>{result.snippet}</p></Link>)}</div>
       </section>
     </div>
-    <section className="panel document-library">
+    <section className="panel document-library final-document-library">
       <header><div><span className="eyebrow">Selected machine</span><h2>Document library</h2></div><small>{documents.length} documents</small></header>
       {!documents.length ? <div className="compact-empty">No documents uploaded for this machine.</div> :
-      <div className="document-table">{documents.map((item) => <article key={item.id}>
-        <div><span className={`document-status ${item.processing_status}`}>{item.processing_status === "ready" ? "✓" : item.processing_status === "failed" ? "!" : "○"} {item.processing_status}</span><h3><Link to={`/documents/${item.id}`}>{item.title}</Link></h3><p>{item.original_filename} · {item.document_type.replaceAll("_", " ")}</p></div>
-        <dl><div><dt>Size</dt><dd>{item.file_size_bytes ? `${Math.ceil(item.file_size_bytes / 1024)} KB` : "—"}</dd></div><div><dt>Pages</dt><dd>{item.page_count ?? "—"}</dd></div><div><dt>Uploaded</dt><dd>{new Date(item.uploaded_at).toLocaleDateString()}</dd></div></dl>
-        {item.processing_error && <p className="processing-error">{item.processing_error}</p>}
-        <div className="card-actions">{item.processing_status === "failed" && <button onClick={() => api.reprocessDocument(item.id).then(() => api.listDocuments(Number(machineId)).then(setDocuments))}>Reprocess</button>}<button className="danger-link" onClick={() => void remove(item)}>Delete</button></div>
-      </article>)}</div>}
+      <div className="table-wrap"><table><thead><tr><th>Document</th><th>Machine</th><th>Type</th><th>Extraction Status</th><th>AI Use</th><th>Action</th></tr></thead><tbody>{documents.map((item) => <tr key={item.id}><td><strong>{item.title}</strong><small>{item.original_filename}</small>{item.processing_error && <span className="processing-error">{item.processing_error}</span>}</td><td>{machines.find((machine) => machine.id === Number(machineId))?.name || "Selected machine"}</td><td>{item.document_type.replaceAll("_", " ")}</td><td><span className={`document-status ${item.processing_status}`}>{item.processing_status}</span></td><td>{item.ai_post_builder_allowed ? "Reviewed for advisory AI" : "Local / deterministic"}</td><td><div className="document-row-actions"><Link to={`/documents/${item.id}`}>Open</Link><Link to={`/machines/${machineId}/profile-extraction/new`}>Extract Knowledge</Link><Link to={`/machine-assistant?machine=${machineId}`}>Ask Machine Assistant</Link>{item.processing_status === "failed" && <button onClick={() => api.reprocessDocument(item.id).then(() => api.listDocuments(Number(machineId)).then(setDocuments))}>Reprocess</button>}<button className="danger-link" onClick={() => void remove(item)}>Delete</button></div></td></tr>)}</tbody></table></div>}
     </section>
   </section>;
 }

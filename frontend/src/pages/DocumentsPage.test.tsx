@@ -27,6 +27,8 @@ test("shows upload form, processing statuses, and extraction failure", async () 
   expect(screen.getByLabelText("PDF, TXT, or MD file")).toBeInTheDocument();
   expect(screen.getByText(/ready$/, { selector: ".document-status" })).toBeInTheDocument();
   expect(screen.getByText(/failed$/, { selector: ".document-status" })).toBeInTheDocument();
+  for (const heading of ["Document", "Machine", "Type", "Extraction Status", "AI Use", "Action"]) expect(screen.getByRole("columnheader", { name: heading })).toBeInTheDocument();
+  expect(screen.queryByText(/Review Eligibility/i)).not.toBeInTheDocument();
 });
 
 test("uploads a selected document", async () => {

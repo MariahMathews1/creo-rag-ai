@@ -16,9 +16,12 @@ import { StandardExtractionReviewPage } from "./pages/StandardExtractionReviewPa
 import { ApprovedProgramComparisonPage } from "./pages/ApprovedProgramComparisonPage";
 import { GPostGeneratorPage } from "./pages/GPostGeneratorPage";
 import { GPostWorkspacePage } from "./pages/GPostWorkspacePage";
-import { PostBuilderWorkspacePage } from "./pages/PostBuilderWorkspacePage";
+import { LegacyPostBuilderWorkspacePage } from "./pages/PostBuilderWorkspacePage";
+import { PostRecordWorkspacePage } from "./pages/PostRecordWorkspacePage";
 import { TranslationExamplesPage } from "./pages/TranslationExamplesPage";
 import { TranslationDetailPage } from "./pages/TranslationDetailPage";
+import { ResearchGate, ResearchToolsPage } from "./pages/ResearchToolsPage";
+import { MachineDetailPage } from "./pages/MachineDetailPage";
 
 export default function App() {
   return (
@@ -27,22 +30,25 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<DashboardPage />} />
           <Route path="machines" element={<MachineProfilesPage />} />
-          <Route path="analysis/new" element={<NewAnalysisPage />} />
-          <Route path="g-code-review" element={<NewAnalysisPage />} />
-          <Route path="analysis/:projectId" element={<AnalysisResultsPage />} />
-          <Route path="analyses/:analysisId/traceability" element={<TraceabilityPage />} />
+          <Route path="machines/:machineId/:view?" element={<MachineDetailPage />} />
+          <Route path="analysis/new" element={<ResearchGate><NewAnalysisPage /></ResearchGate>} />
+          <Route path="g-code-review" element={<ResearchGate><NewAnalysisPage /></ResearchGate>} />
+          <Route path="analysis/:projectId" element={<ResearchGate><AnalysisResultsPage /></ResearchGate>} />
+          <Route path="analyses/:analysisId/traceability" element={<ResearchGate><TraceabilityPage /></ResearchGate>} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="documents/:documentId" element={<DocumentViewerPage />} />
           <Route path="manual-assistant" element={<ManualAssistantPage />} />
           <Route path="machine-assistant" element={<ManualAssistantPage />} />
           <Route path="gpost" element={<GPostGeneratorPage />} />
           <Route path="gpost/:draftId/advanced/legacy-preview" element={<GPostWorkspacePage />} />
-          <Route path="gpost/:draftId/*" element={<PostBuilderWorkspacePage />} />
-          <Route path="translations" element={<TranslationExamplesPage />} />
-          <Route path="translations/patterns" element={<TranslationExamplesPage />} />
-          <Route path="translations/ai-experiment" element={<TranslationExamplesPage />} />
-          <Route path="translations/technical" element={<TranslationExamplesPage />} />
-          <Route path="translations/:exampleId" element={<TranslationDetailPage />} />
+          <Route path="gpost/:draftId/advanced/legacy-ai-workspace/*" element={<LegacyPostBuilderWorkspacePage />} />
+          <Route path="gpost/:draftId/*" element={<PostRecordWorkspacePage />} />
+          <Route path="translations" element={<ResearchGate><TranslationExamplesPage /></ResearchGate>} />
+          <Route path="translations/patterns" element={<ResearchGate><TranslationExamplesPage /></ResearchGate>} />
+          <Route path="translations/ai-experiment" element={<ResearchGate><TranslationExamplesPage /></ResearchGate>} />
+          <Route path="translations/technical" element={<ResearchGate><TranslationExamplesPage /></ResearchGate>} />
+          <Route path="translations/:exampleId" element={<ResearchGate><TranslationDetailPage /></ResearchGate>} />
+          <Route path="research-tools" element={<ResearchToolsPage />} />
           <Route path="machines/:machineId/profile-extraction/new" element={<ProfileExtractionSetupPage />} />
           <Route path="machines/:machineId/profile-extraction/:runId" element={<ProfileExtractionReviewPage />} />
           <Route path="machines/:machineId/revisions" element={<ProfileRevisionsPage />} />

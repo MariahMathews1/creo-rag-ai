@@ -95,6 +95,7 @@ def latest_section_rows(db: Session, draft_id: int) -> list[PostSectionDraft]:
 
 
 def version_snapshot(db: Session, draft: GPostDraft) -> dict:
+    from app.api.post_records import engineering_snapshot
     mappings = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == draft.id)))
     snapshot = snapshot_draft(draft, mappings)
     snapshot["post_sections"] = [{
@@ -103,6 +104,7 @@ def version_snapshot(db: Session, draft: GPostDraft) -> dict:
                    "template": rule.engineer_template or rule.ai_draft_template,
                    "evidence_ids": rule.evidence_ids_json} for rule in section.rules],
     } for section in sorted(latest_section_rows(db, draft.id), key=lambda item: item.section_key)]
+    snapshot["post_development_package"] = engineering_snapshot(db, draft)
     return snapshot
 
 
@@ -195,6 +197,7 @@ def update_draft(draft_id: int, payload: GPostDraftUpdate, db: Session = Depends
 
 @router.post("/gpost-drafts/{draft_id}/versions", response_model=GPostDraftRead, status_code=status.HTTP_201_CREATED)
 def create_version(draft_id: int, db: Session = Depends(get_db)):
+    from app.api.post_records import clone_engineering_record
     old = draft_or_404(draft_id, db)
     lineage = logical_post_versions(db, old)
     latest_saved = db.scalar(select(GPostDraftVersion).where(GPostDraftVersion.gpost_draft_id == old.id).order_by(GPostDraftVersion.created_at.desc()))
@@ -202,6 +205,7 @@ def create_version(draft_id: int, db: Session = Depends(get_db)):
     if latest_saved:
         saved = dict(latest_saved.snapshot_json)
         saved.setdefault("post_sections", [])
+        saved.pop("accepted_post_sections", None)
         if current_snapshot == saved:
             raise HTTPException(409, {"code": "GPOST_NO_VERSION_CHANGES", "message": f"No changes since v{old.version}."})
     next_version = max(item.version for item in lineage) + 1
@@ -244,7 +248,9 @@ def create_version(draft_id: int, db: Session = Depends(get_db)):
                 condition=rule.condition, output_behavior=rule.output_behavior, ai_draft_template=rule.ai_draft_template,
                 engineer_template=rule.engineer_template, required_machine_facts_json=list(rule.required_machine_facts_json),
                 evidence_ids_json=list(rule.evidence_ids_json), assumptions_json=list(rule.assumptions_json), warnings_json=list(rule.warnings_json),
-                status=rule.status, review_reason=rule.review_reason, reviewer_label=rule.reviewer_label, reviewed_at=rule.reviewed_at))
+                status=rule.status, engineering_classification=rule.engineering_classification,
+                review_reason=rule.review_reason, reviewer_label=rule.reviewer_label, reviewed_at=rule.reviewed_at))
+    clone_engineering_record(db, old.id, new.id)
     old.status = "superseded"; old.superseded_at = utc_now()
     db.flush()
     copied = list(db.scalars(select(GPostMapping).where(GPostMapping.gpost_draft_id == new.id)))
@@ -267,6 +273,7 @@ def archive_draft(draft_id: int, db: Session = Depends(get_db)):
 
 @router.post("/gpost-drafts/{draft_id}/duplicate", response_model=GPostDraftRead, status_code=status.HTTP_201_CREATED)
 def duplicate_draft(draft_id: int, db: Session = Depends(get_db)):
+    from app.api.post_records import clone_engineering_record
     source = draft_or_404(draft_id, db)
     duplicate = GPostDraft(machine_profile_id=source.machine_profile_id, machine_profile_revision_id=source.machine_profile_revision_id,
         created_from_draft_id=None, name=f"{source.name} Copy", version=1, status="review_required",
@@ -297,7 +304,9 @@ def duplicate_draft(draft_id: int, db: Session = Depends(get_db)):
                 condition=rule.condition, output_behavior=rule.output_behavior, ai_draft_template=rule.ai_draft_template,
                 engineer_template=rule.engineer_template, required_machine_facts_json=list(rule.required_machine_facts_json),
                 evidence_ids_json=list(rule.evidence_ids_json), assumptions_json=list(rule.assumptions_json), warnings_json=list(rule.warnings_json),
-                status=rule.status, review_reason=rule.review_reason, reviewer_label=rule.reviewer_label, reviewed_at=rule.reviewed_at))
+                status=rule.status, engineering_classification=rule.engineering_classification,
+                review_reason=rule.review_reason, reviewer_label=rule.reviewer_label, reviewed_at=rule.reviewed_at))
+    clone_engineering_record(db, source.id, duplicate.id)
     db.flush()
     db.add(GPostDraftVersion(gpost_draft_id=duplicate.id, version=1, snapshot_json=version_snapshot(db, duplicate),
                              change_summary_json={"duplicated_from_draft_id": source.id}))
@@ -313,6 +322,8 @@ def delete_draft(draft_id: int, db: Session = Depends(get_db)):
         raise HTTPException(409, {"code": "GPOST_DELETE_RETENTION_BLOCKED",
             "message": "This post has immutable version history and cannot be deleted. Archive it instead."})
     audit(db, "gpost_draft_deleted", draft, retained_audit=True)
+    from app.api.post_records import delete_engineering_record
+    delete_engineering_record(db, draft.id)
     db.execute(delete(GPostDraftVersion).where(GPostDraftVersion.gpost_draft_id == draft.id))
     db.delete(draft); db.commit()
 

@@ -103,10 +103,12 @@ export function MachineProfileForm({
   profile,
   onSubmit,
   onCancel,
+  simple = false,
 }: {
   profile?: MachineProfile | null;
   onSubmit: (value: MachineProfileInput) => Promise<void>;
   onCancel: () => void;
+  simple?: boolean;
 }) {
   const [form, setForm] = useState<FormState>(() => initialState(profile));
   const [saving, setSaving] = useState(false);
@@ -156,6 +158,32 @@ export function MachineProfileForm({
       setSaving(false);
     }
   }
+
+  if (simple) return (
+    <form className="profile-form simple-machine-form" onSubmit={submit}>
+      <div className="form-section">
+        <div className="form-grid">
+          <label>Machine Name<input required value={form.name} onChange={(e) => change("name", e.target.value)} /></label>
+          <label>Manufacturer<input required value={form.manufacturer} onChange={(e) => change("manufacturer", e.target.value)} /></label>
+          <label>Model<input required value={form.model} onChange={(e) => change("model", e.target.value)} /></label>
+          <label>Machine Type<select value={form.machine_type} onChange={(e) => change("machine_type", e.target.value)}>
+            <option value="mill">Mill</option><option value="lathe">Lathe</option>
+            <option value="mill-turn">Mill-turn</option><option value="turning_center">Turning center</option>
+            <option value="machining_center">Machining center</option><option value="vertical_mill">Vertical mill</option>
+            <option value="horizontal_mill">Horizontal mill</option><option value="vertical_lathe">Vertical lathe</option>
+            <option value="other">Other</option>
+          </select></label>
+          <label>Controller<input required value={form.controller_name} onChange={(e) => change("controller_name", e.target.value)} /></label>
+          <label>Notes <small>Optional</small><textarea rows={3} value={form.notes} onChange={(e) => change("notes", e.target.value)} /></label>
+        </div>
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <div className="form-actions">
+        <button type="button" className="button secondary" onClick={onCancel}>Cancel</button>
+        <button className="button primary" disabled={saving}>{saving ? "Saving…" : profile ? "Save Changes" : "Create Machine"}</button>
+      </div>
+    </form>
+  );
 
   return (
     <form className="profile-form" onSubmit={submit}>

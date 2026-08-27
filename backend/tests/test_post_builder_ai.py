@@ -20,6 +20,11 @@ def test_central_policy_rejects_cl_ncl_part_geometry_and_toolpath():
         ({"notes": "GOTO/1.0,2.0,3.0"}, "AI_CL_NCL_TRANSMISSION_PROHIBITED"),
         ({"part_geometry": {"diameter": 1}}, "AI_PART_SPECIFIC_DATA_PROHIBITED"),
         ({"toolpath": [{"x": 1}]}, "AI_PART_SPECIFIC_DATA_PROHIBITED"),
+        ({"cad_model": "customer.step"}, "AI_PART_SPECIFIC_DATA_PROHIBITED"),
+        ({"step_geometry": {"faces": 12}}, "AI_PART_SPECIFIC_DATA_PROHIBITED"),
+        ({"iges_geometry": "entity data"}, "AI_PART_SPECIFIC_DATA_PROHIBITED"),
+        ({"part_specific_diagnostic": "ERROR at customer feature"}, "AI_PART_SPECIFIC_DATA_PROHIBITED"),
+        ({"notes": "ISO-10303-21 customer geometry"}, "AI_PART_SPECIFIC_DATA_PROHIBITED"),
     ]:
         with pytest.raises(AIGovernanceViolation) as raised: enforce_post_builder_ai_policy(payload)
         assert raised.value.code == code

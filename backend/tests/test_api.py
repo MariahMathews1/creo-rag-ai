@@ -63,6 +63,53 @@ def test_machine_update_get_and_delete(client):
     assert client.get(f"/api/machines/{profile_id}").status_code == 404
 
 
+def test_machine_archive_filter_restore_and_edit(client):
+    created = client.post("/api/machines", json=profile_payload()).json()
+    profile_id = created["id"]
+    edited_payload = profile_payload(name="Edited Demo Mill", notes="Lifecycle note")
+    edited = client.put(f"/api/machines/{profile_id}", json=edited_payload)
+    assert edited.status_code == 200
+    assert edited.json()["name"] == "Edited Demo Mill"
+    assert edited.json()["notes"] == "Lifecycle note"
+
+    archived = client.post(f"/api/machines/{profile_id}/archive")
+    assert archived.status_code == 200
+    assert archived.json()["archived_at"] is not None
+    assert all(row["id"] != profile_id for row in client.get("/api/machines").json())
+    assert any(row["id"] == profile_id for row in client.get("/api/machines?include_archived=true").json())
+    assert client.get(f"/api/machines/{profile_id}").status_code == 200
+
+    restored = client.post(f"/api/machines/{profile_id}/restore")
+    assert restored.status_code == 200
+    assert restored.json()["archived_at"] is None
+
+
+def test_machine_delete_is_blocked_when_post_records_exist(client, db_session):
+    from app.models.gpost import GPostDraft
+    from app.models.profile_extraction import MachineProfileRevision
+
+    profile_id = client.post("/api/machines", json=profile_payload()).json()["id"]
+    revision = db_session.query(MachineProfileRevision).filter_by(machine_profile_id=profile_id).one()
+    draft = GPostDraft(
+        machine_profile_id=profile_id,
+        machine_profile_revision_id=revision.id,
+        name="Dependent Post",
+        controller_family="fanuc_mill",
+        machine_type="mill",
+    )
+    db_session.add(draft)
+    db_session.commit()
+
+    blocked = client.delete(f"/api/machines/{profile_id}")
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == (
+        "This machine has 1 Post Records and cannot be deleted. "
+        "Archive it instead or resolve the dependent records."
+    )
+    assert db_session.get(GPostDraft, draft.id) is not None
+    assert client.get(f"/api/machines/{profile_id}").status_code == 200
+
+
 def test_missing_machine_returns_404(client):
     assert client.get("/api/machines/9999").status_code == 404
 

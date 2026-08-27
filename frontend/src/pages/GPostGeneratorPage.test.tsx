@@ -17,7 +17,9 @@ vi.mock("../api/client", () => ({ api: {
   getGPostHistoricalTranslationEvidence: vi.fn(),
   getGPostPreviewToolpath: vi.fn(),
   getTranslationAIProviderStatus: vi.fn(), retrieveTranslationExamples: vi.fn(), explainTranslation: vi.fn(),
+  getPostRecordSummary: vi.fn(), listSiteStandards: vi.fn(),
   getDocumentContent: vi.fn(), gpostExportUrl: vi.fn((id, format) => `/export-${id}.${format}`),
+  postDevelopmentPackageUrl: vi.fn((id, format) => `/package-${id}.${format}`),
 } }));
 
 const machine = {
@@ -146,6 +148,8 @@ beforeEach(() => {
   vi.mocked(api.listReferencePrograms).mockResolvedValue([reference] as never);
   vi.mocked(api.listStandards).mockResolvedValue([] as never);
   vi.mocked(api.listGPostDrafts).mockResolvedValue([draft] as never);
+  vi.mocked(api.listSiteStandards).mockResolvedValue([] as never);
+  vi.mocked(api.getPostRecordSummary).mockRejectedValue(new Error("not used by legacy test fixture"));
   vi.mocked(api.listGPostMappings).mockResolvedValue(mappings as never);
   vi.mocked(api.getGPostDraft).mockResolvedValue(draft as never);
   vi.mocked(api.updateGPostDraft).mockImplementation(async (_id, payload) => ({ ...draft, ...payload, selected_document_ids_json: payload.selected_document_ids ?? draft.selected_document_ids_json }) as never);
@@ -166,6 +170,7 @@ beforeEach(() => {
 test("primary navigation uses the Post Builder identity", () => {
   render(<MemoryRouter><Routes><Route element={<Layout />}><Route index element={<div>Home</div>} /></Route></Routes></MemoryRouter>);
   expect(screen.getByRole("link", { name: /Post Builder/ })).toHaveAttribute("href", "/gpost");
+  expect(screen.getAllByRole("link")).toHaveLength(5);
   expect(screen.queryByText("Post Processor Lab")).not.toBeInTheDocument();
 });
 
@@ -175,7 +180,7 @@ test("landing page shows one-post management controls instead of the CL test har
   expect(screen.getByRole("region", { name: "Post filters" })).toBeInTheDocument();
   expect(screen.getByLabelText("Search")).toBeInTheDocument();
   expect(screen.getByLabelText("Machine")).toBeInTheDocument();
-  expect(screen.getAllByText("Building")).toHaveLength(2);
+  expect(screen.getAllByText("Needs Information").length).toBeGreaterThan(0);
   expect(screen.queryByLabelText("CL / NCL Input")).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/gpost/4");
   expect(screen.getByRole("button", { name: `More actions for ${draft.name}` })).toBeInTheDocument();
@@ -193,19 +198,26 @@ test("guided creation auto-selects a compatible foundation and omits reference p
   render(<MemoryRouter initialEntries={["/gpost"]}><Routes><Route path="/gpost" element={<GPostGeneratorPage />} /><Route path="/gpost/:draftId" element={<div>Created workspace</div>} /></Routes></MemoryRouter>);
   await user.click(await screen.findByRole("button", { name: "Create Post" }));
   expect(await screen.findByText("Select Machine", { selector: "h1" })).toBeInTheDocument();
-  expect(screen.getByText("Machine Knowledge")).toBeInTheDocument();
   expect(screen.queryByText("Reference Programs")).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Select" }));
   expect(screen.getByText("Post Setup", { selector: "h1" })).toBeInTheDocument();
   expect(screen.getByText("FANUC Lathe")).toBeInTheDocument();
-  expect(screen.getByText("1 attached")).toBeInTheDocument();
+  expect(screen.getByText("Machine Knowledge")).toBeInTheDocument();
+  expect(screen.getByText("1 available")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Continue" }));
-  expect(screen.getByDisplayValue("FANUC Lathe")).toHaveAttribute("readonly");
-  expect(screen.getByText("Current", { selector: "dd" })).toBeInTheDocument();
+  expect(screen.getByText("FANUC Lathe")).toBeInTheDocument();
+  expect(screen.queryByText(/Revision v/)).not.toBeInTheDocument();
   expect(screen.queryByRole("combobox", { name: /Template Family/ })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Create Post" }));
   expect(await screen.findByText("Created workspace")).toBeInTheDocument();
   expect(api.createGPostDraft).toHaveBeenCalledWith(1, expect.objectContaining({ machine_profile_revision_id: 2, controller_family: "fanuc_lathe", selected_document_ids: [3], reference_program_ids: [] }));
+});
+
+test("machine query preselects the machine in Post creation", async () => {
+  render(<MemoryRouter initialEntries={["/gpost?machine=1"]}><Routes><Route path="/gpost" element={<GPostGeneratorPage />} /></Routes></MemoryRouter>);
+  expect(await screen.findByText("Post Setup", { selector: "h1" })).toBeInTheDocument();
+  expect(screen.getByText(machine.name)).toBeInTheDocument();
+  expect(screen.getByText("FANUC Lathe")).toBeInTheDocument();
 });
 
 test("post list search, filters, archive, rename, and delete are explicit", async () => {
@@ -213,7 +225,7 @@ test("post list search, filters, archive, rename, and delete are explicit", asyn
   await screen.findByText(draft.name);
   await user.type(screen.getByLabelText("Search"), "missing");
   expect(screen.getByText("No posts match these filters.")).toBeInTheDocument();
-  await user.clear(screen.getByLabelText("Search")); await user.selectOptions(screen.getByLabelText("Machine"), "1"); await user.selectOptions(screen.getByLabelText("Sort"), "name");
+  await user.clear(screen.getByLabelText("Search")); await user.selectOptions(screen.getByLabelText("Machine"), "1");
   await user.click(screen.getByRole("button", { name: `More actions for ${draft.name}` })); await user.click(screen.getByRole("menuitem", { name: "Rename" }));
   const input = screen.getByLabelText("Post Name"); await user.clear(input); await user.type(input, "Renamed Post"); await user.click(screen.getByRole("button", { name: "Save Name" }));
   await waitFor(() => expect(api.updateGPostDraft).toHaveBeenCalledWith(4, { name: "Renamed Post" }));

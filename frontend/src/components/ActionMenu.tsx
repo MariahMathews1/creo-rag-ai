@@ -13,7 +13,7 @@ export interface ActionMenuItem {
 
 interface MenuPosition { top: number; left: number; minWidth: number; }
 
-export function ActionMenu({ label, items, align = "right", active = false }: { label: string; items: ActionMenuItem[]; align?: "left" | "right"; active?: boolean }) {
+export function ActionMenu({ label, triggerLabel, items, align = "right", active = false }: { label: string; triggerLabel?: string; items: ActionMenuItem[]; align?: "left" | "right"; active?: boolean }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition>({ top: 0, left: 0, minWidth: 240 });
   const trigger = useRef<HTMLButtonElement>(null);
@@ -67,7 +67,7 @@ export function ActionMenu({ label, items, align = "right", active = false }: { 
     ? <Link role="menuitem" aria-current={item.active ? "page" : undefined} tabIndex={-1} className={`${item.active ? "active" : ""} ${item.danger ? "danger" : ""} ${item.divider ? "divider" : ""}`} key={item.label} to={item.to} onClick={() => setOpen(false)}>{item.label}</Link>
     : <button role="menuitem" aria-current={item.active ? "page" : undefined} tabIndex={-1} className={`${item.active ? "active" : ""} ${item.danger ? "danger" : ""} ${item.divider ? "divider" : ""}`} key={item.label} onClick={() => { setOpen(false); item.onSelect?.(); }}>{item.label}</button>)}</div>, document.body) : null;
   return <div className={`action-menu align-${align}`}>
-    <button ref={trigger} type="button" className={`button tertiary action-menu-trigger ${active ? "active" : ""}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{label}<span aria-hidden="true">⌄</span></button>
+    <button ref={trigger} type="button" className={`button tertiary action-menu-trigger ${active ? "active" : ""}`} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{triggerLabel || label}<span aria-hidden="true">⌄</span></button>
     {popover}
   </div>;
 }

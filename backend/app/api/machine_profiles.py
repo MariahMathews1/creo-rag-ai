@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.entities import MachineProfile
+from app.models.entities import MachineProfile, utc_now
+from app.models.gpost import GPostDraft
 from app.schemas.machine_profile import (
     MachineProfileCreate,
     MachineProfileRead,
@@ -40,8 +41,11 @@ def create_machine_profile(payload: MachineProfileCreate, db: Session = Depends(
 
 
 @router.get("", response_model=list[MachineProfileRead])
-def list_machine_profiles(db: Session = Depends(get_db)):
-    return db.scalars(select(MachineProfile).order_by(MachineProfile.name)).all()
+def list_machine_profiles(include_archived: bool = False, db: Session = Depends(get_db)):
+    query = select(MachineProfile)
+    if not include_archived:
+        query = query.where(MachineProfile.archived_at.is_(None))
+    return db.scalars(query.order_by(MachineProfile.name)).all()
 
 
 @router.get("/{profile_id}", response_model=MachineProfileRead)
@@ -117,6 +121,35 @@ def patch_machine_profile(
 @router.delete("/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_machine_profile(profile_id: int, db: Session = Depends(get_db)):
     profile = _get_or_404(profile_id, db)
+    post_count = db.scalar(
+        select(func.count(GPostDraft.id)).where(GPostDraft.machine_profile_id == profile_id)
+    ) or 0
+    if post_count:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This machine has {post_count} Post Records and cannot be deleted. "
+                "Archive it instead or resolve the dependent records."
+            ),
+        )
     db.delete(profile)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{profile_id}/archive", response_model=MachineProfileRead)
+def archive_machine_profile(profile_id: int, db: Session = Depends(get_db)):
+    profile = _get_or_404(profile_id, db)
+    profile.archived_at = profile.archived_at or utc_now()
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+@router.post("/{profile_id}/restore", response_model=MachineProfileRead)
+def restore_machine_profile(profile_id: int, db: Session = Depends(get_db)):
+    profile = _get_or_404(profile_id, db)
+    profile.archived_at = None
+    db.commit()
+    db.refresh(profile)
+    return profile

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     """Environment-backed application settings."""
 
     app_name: str = "Creo NC Post Assistant API"
+    app_environment: str = "development"
     api_prefix: str = "/api"
     database_url: str = "sqlite:///./data/creo_assistant.db"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

@@ -500,7 +500,7 @@ export interface PostBuilderEvidence {
 export interface PostRuleDraft {
   id: number; rule_key: string; name: string; description: string | null; condition: string; output_behavior: string;
   ai_draft_template: string | null; engineer_template: string | null; required_machine_facts_json: string[];
-  evidence_ids_json: number[]; assumptions_json: string[]; warnings_json: string[]; status: string;
+  evidence_ids_json: number[]; assumptions_json: string[]; warnings_json: string[]; status: string; engineering_classification?: "STANDARD_OFG" | "CUSTOM_LOGIC" | "SITE_STANDARD" | "UNKNOWN";
   review_reason: string | null; reviewer_label: string | null; reviewed_at: string | null; created_at: string; updated_at: string;
 }
 export interface PostSectionDraft {
@@ -521,6 +521,105 @@ export interface AssembledPostDraft {
   draft_id: number; name: string; status: "setup" | "building" | "needs_information" | "ready_for_review" | "reviewed_rnd_draft" | "archived";
   required_area_count: number; counts: Record<string, number>; components: AssembledPostComponent[];
   ready_for_complete_review: boolean; advisory_only: true; native_gpost_export: "not_configured";
+}
+
+export interface MachineKnowledgeFact {
+  id: number; post_record_id: number; category: string; fact_key: string; name: string;
+  value_json: unknown; unit: string | null; status: string; source_document_id: number | null;
+  source_label: string | null; source_location: string | null; reviewer: string | null;
+  reviewed_at: string | null; review_note: string | null; created_at: string; updated_at: string;
+  used_by: Array<{ type: string; id: number; label: string }>;
+}
+
+export interface OFGSetting {
+  id: number; post_record_id: number; category: string; setting_key: string; display_name: string;
+  subsection: string | null;
+  description: string | null; value_json: unknown; unit: string | null; status: string;
+  source_machine_fact_ids_json: number[]; source_document_evidence_ids_json: number[];
+  site_standard_ids_json: number[]; requires_custom_logic: boolean; custom_logic_id: number | null;
+  ofg_menu_path: string | null; ofg_menu_path_status: string; reviewer: string | null;
+  relevance_class: "core" | "conditional" | "advanced";
+  relevance_label: "required_for_post" | "applicable" | "optional" | "not_applicable" | "advanced";
+  is_applicable: boolean; user_selected: boolean;
+  source_type: "Machine Knowledge" | "Controller Documentation" | "OFG Reference" | "Site Standard" | "Existing Post Reference" | "Engineer Entry" | "Unknown";
+  source_reference: string | null; structured_value_json: unknown; code_status: "defined" | "not_available" | "not_required" | "unknown" | null;
+  review_note: string | null; reviewed_at: string | null; created_at: string; updated_at: string;
+  source_machine_facts: Array<{ id: number; name: string; value: unknown; status: string; source: string | null; source_location: string | null }>;
+}
+
+export interface SiteStandard {
+  id: number; name: string; description: string | null; scope: string;
+  applicable_machine_types_json: string[]; applicable_controller_families_json: string[];
+  applicable_machine_ids_json: number[]; category: string; rule: string; validation_requirements_json: string[]; source: string | null;
+  status: string; reviewer: string | null; version: number; effective_date: string | null;
+  notes: string | null; created_at: string; updated_at: string;
+}
+
+export interface PostStandardApplication {
+  id: number; post_record_id: number; site_standard_id: number; status: string;
+  conflict_status: string; conflict_note: string | null; reviewer: string | null;
+  review_note: string | null; created_at: string; updated_at: string; standard: SiteStandard;
+}
+
+export interface CustomLogicItem {
+  id: number; post_record_id: number; name: string; category: string; reason: string;
+  implementation_type: string; status: string; evidence_ids_json: number[]; site_standard_ids_json: number[];
+  source_format: string; source_reference: string | null; reviewer: string | null;
+  review_note: string | null; created_at: string; updated_at: string;
+}
+
+export interface PostOpenQuestion {
+  id: number; post_record_id: number; question_type: string; title: string; description: string | null;
+  severity: string; related_type: string | null; related_id: number | null; source_context: string | null;
+  owner: string | null; status: string; resolution: string | null; created_at: string; updated_at: string;
+}
+
+export interface PostValidationRecord {
+  id: number; post_record_id: number; post_version_id: number | null; validation_type: string;
+  name: string | null;
+  performed_by: string; performed_at: string; environment: string | null; result: string;
+  notes: string | null; attachment_reference: string | null; external_tool: string | null;
+  external_reference: string | null; test_program_name: string | null; findings_count: number;
+  blocking_findings_count: number; references_json: string[]; ai_used: boolean; created_at: string;
+}
+export interface ValidationFinding {
+  id: number; validation_record_id: number; severity: string; category: string; title: string;
+  description: string | null; related_ofg_setting_id: number | null; related_custom_logic_id: number | null;
+  related_site_standard_id: number | null; status: string; resolution_note: string | null;
+  created_at: string; updated_at: string;
+}
+export interface ValidationPolicy {
+  id: number; post_record_id: number; name: string; required_validation_types_json: string[];
+  optional_validation_types_json: string[]; source: string | null; reviewer: string | null; updated_at: string;
+}
+export interface GPostDiagnostic {
+  id: number; validation_record_id: number; severity: string; code: string | null; message: string;
+  line_reference: number | null; source_reference: string | null; custom_logic_reference_id: number | null;
+  raw_excerpt: string; created_at: string;
+}
+export interface ValidationTimeline {
+  post_record_id: number; version: number; events: Array<{ id: number; type: string; name: string | null;
+    result: string; performed_by: string; performed_at: string; findings_count: number }>;
+}
+export interface ValidationHandoff {
+  post_record_id: number; post_version: number; machine: string; controller: string;
+  current_validation_status: string; outstanding_configuration_issues: number; custom_fil_status: string;
+  development_package_url: string; does_not_run_vericut: boolean;
+  checklist: Array<{ key: string; label: string; complete: boolean }>;
+}
+
+export interface PostRecordSummary {
+  post_record_id: number; status: string;
+  machine_knowledge: { reviewed: number; total: number };
+  ofg_configuration: { reviewed: number; total: number };
+  site_standards: { applied: number; total: number; conflicts: number };
+  custom_logic: { identified: number; reviewed: number };
+  open_questions: { open: number; total: number };
+  validation: { count: number; status: string; required_gates?: string[]; gate_status?: Record<string, string>;
+    gates_satisfied?: boolean; open_findings?: number; stages?: Record<string, string> };
+  blockers: Array<{ type: string; id: number; title: string; reason: string }>;
+  next_action: { label: string; path: string };
+  native_gpost_integration: { status: string; label: string; explanation: string };
 }
 export interface ToolpathPoint { x: number | null; y: number | null; z: number | null; a?: number | null; b?: number | null; c?: number | null; }
 export interface ToolpathSegment {

@@ -4,7 +4,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-DraftStatus = Literal["draft", "under_review", "review_required", "validated_for_rnd", "superseded", "archived"]
+DraftStatus = Literal[
+    "draft", "under_review", "review_required", "validated_for_rnd", "superseded", "archived",
+    "setup", "building", "needs_information", "ready_for_engineering_review", "under_validation", "rnd_validated",
+]
 MappingType = Literal["direct", "stateful", "conditional", "template", "cycle", "unsupported", "manual"]
 ReviewStatus = Literal["pending", "accepted", "accepted_with_edit", "rejected", "deferred"]
 SupportStatus = Literal["supported", "not_applicable", "unsupported_required", "not_implemented"]
