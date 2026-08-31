@@ -22,6 +22,7 @@ import { TranslationExamplesPage } from "./pages/TranslationExamplesPage";
 import { TranslationDetailPage } from "./pages/TranslationDetailPage";
 import { ResearchGate, ResearchToolsPage } from "./pages/ResearchToolsPage";
 import { MachineDetailPage } from "./pages/MachineDetailPage";
+import { ManualMachineInformationPage } from "./pages/ManualMachineInformationPage";
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="machines" element={<MachineProfilesPage />} />
           <Route path="machines/:machineId/:view?" element={<MachineDetailPage />} />
+          <Route path="machines/:machineId/machine-information/manual" element={<ManualMachineInformationPage />} />
           <Route path="analysis/new" element={<ResearchGate><NewAnalysisPage /></ResearchGate>} />
           <Route path="g-code-review" element={<ResearchGate><NewAnalysisPage /></ResearchGate>} />
           <Route path="analysis/:projectId" element={<ResearchGate><AnalysisResultsPage /></ResearchGate>} />

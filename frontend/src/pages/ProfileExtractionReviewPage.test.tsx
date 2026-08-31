@@ -188,6 +188,16 @@ test("renders the guided dashboard, queue counts, category progress, and strong 
   expect(screen.getByText("0 / 1 reviewed · 1 pending · 1 conflicts")).toBeInTheDocument();
 });
 
+test("simplified missing information action opens the shared manual-entry workflow", async () => {
+  vi.mocked(api.listProfileProposals).mockResolvedValue([conflictProposal, foundProposal, { ...missingProposal, field_key: "x_travel", field_label: "X-axis travel", field_category: "axis_limits" }] as never);
+  renderPage("/machines/2/profile-extraction/11?v1=1");
+  const link = await screen.findByRole("link", { name: "Enter Manually" });
+  expect(link).toHaveAttribute("href", "/machines/2/machine-information/manual?run=11&proposal=23&field=x_travel");
+  expect(link.parentElement).toHaveClass("missing-information-actions");
+  expect(screen.getByRole("link", { name: "Find in Other Documents" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Ask Machine Assistant" })).toBeInTheDocument();
+});
+
 test("accepts a high-confidence field, shows confirmation, and auto-advances", async () => {
   const user = userEvent.setup();
   renderPage("/machines/2/profile-extraction/11?queue=high-confidence&field=manufacturer");

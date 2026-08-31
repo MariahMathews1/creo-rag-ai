@@ -7,7 +7,7 @@ import { MachineDetailPage } from "./MachineDetailPage";
 import { MachineProfilesPage } from "./MachineProfilesPage";
 
 vi.mock("../api/client", () => ({ api: {
-  listProfiles: vi.fn(), getProfile: vi.fn(), listDocuments: vi.fn(), listGPostDrafts: vi.fn(), listMachineKnowledge: vi.fn(), listPostQuestions: vi.fn(),
+  listProfiles: vi.fn(), getProfile: vi.fn(), listDocuments: vi.fn(), listGPostDrafts: vi.fn(), listMachineKnowledge: vi.fn(), listManualMachineInformation: vi.fn(), listPostQuestions: vi.fn(),
   updateProfile: vi.fn(), createProfile: vi.fn(), deleteProfile: vi.fn(), archiveProfile: vi.fn(), restoreProfile: vi.fn(), updateMachineKnowledge: vi.fn(),
 } }));
 
@@ -41,14 +41,16 @@ beforeEach(() => {
   vi.mocked(api.listGPostDrafts).mockImplementation(async (id) => id === 4 || id === 5 ? [] as never : [post(id)] as never);
   vi.mocked(api.listMachineKnowledge).mockImplementation(async (id) => id === 10 ? [fact("confirmed", 101)] as never : id === 20 ? [fact("unknown", 201), fact("unknown", 202), fact("unknown", 203)] as never : [fact("needs_review", 301)] as never);
   vi.mocked(api.listPostQuestions).mockResolvedValue([]); vi.mocked(api.archiveProfile).mockResolvedValue({} as never); vi.mocked(api.restoreProfile).mockResolvedValue({} as never);
+  vi.mocked(api.listManualMachineInformation).mockResolvedValue([]);
 });
 
 test("machines table stays compact and defaults to active machines", async () => {
   renderPage(); expect(await screen.findByText("KENT USA KLS-1840N")).toBeInTheDocument();
-  for (const heading of ["Machine", "Type", "Controller", "Documents", "Knowledge", "Posts", "Action"]) expect(screen.getByRole("columnheader", { name: heading })).toBeInTheDocument();
+  for (const heading of ["Machine", "Type", "Controller", "Documents", "Machine Info", "Posts", "Actions"]) expect(screen.getByRole("columnheader", { name: heading })).toBeInTheDocument();
   expect(screen.queryByText("Archived Lathe")).not.toBeInTheDocument();
-  expect(screen.getByText("Ready")).toBeInTheDocument(); expect(screen.getByText("Needs 3 Facts")).toBeInTheDocument(); expect(screen.getByText("Needs Review")).toBeInTheDocument(); expect(screen.getByText("No Knowledge")).toBeInTheDocument();
+  expect(screen.getByText("Ready")).toBeInTheDocument(); expect(screen.getByText("Needs 3 Values")).toBeInTheDocument(); expect(screen.getByText("Needs Review")).toBeInTheDocument(); expect(screen.getByText("No Information")).toBeInTheDocument();
   expect(screen.getByText("DEMO")).toBeInTheDocument(); expect(screen.getAllByRole("link", { name: "Open →" })).toHaveLength(4);
+  expect(screen.getAllByRole("link", { name: "Open →" })[0]).toHaveClass("button", "tertiary", "machine-open-link");
   expect(screen.getAllByRole("button", { name: /More actions for/ })).toHaveLength(4);
   expect(api.listProfiles).toHaveBeenCalledWith(true);
 });

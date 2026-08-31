@@ -1,4 +1,4 @@
-"""Seed the fictional KLS-1840N V1 clarity-pass walkthrough."""
+"""Seed the single fictional V1 clarity-pass walkthrough."""
 from sqlalchemy import select
 
 from app.api.post_records import ensure_defaults
@@ -18,12 +18,12 @@ from app.models.gpost import (
 from app.models.profile_extraction import MachineProfileRevision
 
 
-MACHINE_NAME = "KLS-1840N Demo"
-MACHINE_ALIASES = (MACHINE_NAME, "KLS-1840N V1 Demo")
-DRAFT_NAME = "KLS-1840N FANUC Demo Post"
-DRAFT_ALIASES = (DRAFT_NAME, "KLS-1840N Demo Post")
-DOCUMENT_TITLE = "KLS Machine Manual — Fictional Demo"
-DOCUMENT_ALIASES = (DOCUMENT_TITLE, "KLS-1840N Fictional Machine Manual")
+MACHINE_NAME = "R&D FANUC Lathe Demo"
+MACHINE_ALIASES = (MACHINE_NAME, "KLS-1840N Demo", "KLS-1840N V1 Demo")
+DRAFT_NAME = "RL-200 FANUC 0i-TF Demo Post"
+DRAFT_ALIASES = (DRAFT_NAME, "KLS-1840N FANUC Demo Post", "KLS-1840N Demo Post")
+DOCUMENT_TITLE = "RL-200 Machine Manual — Fictional Demo"
+DOCUMENT_ALIASES = (DOCUMENT_TITLE, "KLS Machine Manual — Fictional Demo", "KLS-1840N Fictional Machine Manual")
 STANDARD_NAME = "Tool Change Safe Retract"
 LOGIC_NAME = "G74 Grooving Behavior"
 LOGIC_ALIASES = (LOGIC_NAME, "G74 Cycle Behavior")
@@ -91,11 +91,11 @@ def main() -> None:
         if machine is None:
             machine = MachineProfile(
                 name=MACHINE_NAME,
-                manufacturer="KENT USA (fictional demo context)",
-                model="KLS-1840N",
+                manufacturer="R&D Systems — FICTIONAL DEMO",
+                model="RL-200",
                 controller_name="FANUC-style fictional demo controller",
                 controller_manufacturer="FANUC",
-                controller_model="Fictional 0i-T context",
+                controller_model="Fictional 0i-TF context",
                 controller_version="DEMO ONLY",
                 machine_type=MachineType.LATHE,
                 axis_count=2,
@@ -119,11 +119,11 @@ def main() -> None:
 
         # Reapply the canonical walkthrough context on every run so reset/seed is deterministic.
         machine.name = MACHINE_NAME
-        machine.manufacturer = "KENT USA — FICTIONAL DEMO"
-        machine.model = "KLS-1840N"
+        machine.manufacturer = "R&D Systems — FICTIONAL DEMO"
+        machine.model = "RL-200"
         machine.controller_name = "FANUC-style fictional demo controller"
         machine.controller_manufacturer = "FANUC"
-        machine.controller_model = "Fictional 0i-T context"
+        machine.controller_model = "Fictional 0i-TF context"
         machine.controller_version = "DEMO ONLY"
         machine.machine_type = MachineType.LATHE
         machine.axis_count = 2
@@ -194,7 +194,7 @@ def main() -> None:
                 document_type=DocumentType.MACHINE_MANUAL,
                 manufacturer="Fictional demo source",
                 controller_name=machine.controller_name,
-                original_filename="kls-1840n-fictional-demo-manual.txt",
+                original_filename="rl-200-fictional-demo-manual.txt",
                 mime_type="text/plain",
                 extracted_text=evidence_text,
                 page_count=84,
@@ -265,6 +265,7 @@ def main() -> None:
             fact = facts[key]
             fact.value_json = value
             fact.status = "confirmed"
+            fact.post_review_status = "reviewed_for_post"
             fact.source_document_id = None
             fact.source_label = f"Machine configuration revision {revision.revision_number}"
             fact.source_location = "Reviewed machine profile"
@@ -272,6 +273,7 @@ def main() -> None:
             fact.reviewed_at = utc_now()
         facts["y_travel"].value_json = None
         facts["y_travel"].status = "not_applicable"
+        facts["y_travel"].post_review_status = "reviewed_for_post"
         facts["y_travel"].source_document_id = None
         facts["y_travel"].source_label = f"Machine configuration revision {revision.revision_number}"
         facts["y_travel"].source_location = "Two-axis lathe configuration"
@@ -290,6 +292,7 @@ def main() -> None:
             fact.value_json = value
             fact.unit = unit
             fact.status = status
+            fact.post_review_status = "reviewed_for_post" if status == "confirmed" else "available_from_machine"
             fact.source_document_id = document.id
             fact.source_label = DOCUMENT_TITLE
             fact.source_location = location
@@ -400,6 +403,9 @@ def main() -> None:
             db.add(logic)
             db.flush()
         logic.name = LOGIC_NAME
+        logic.related_ofg_setting_id = settings["lathe_cycles"].id
+        logic.desired_behavior = "Emit the historically approved G74 grooving behavior for this machine after local verification."
+        logic.runtime_trigger = "When the approved turning workflow requests the G74 grooving cycle."
         logic.reason = "The exact historically approved G74 grooving output is not yet confirmed by the fictional source evidence."
         logic.implementation_type = "Potential FIL/CIMFIL customization — verification required"
         logic.status = "needs_review"
@@ -462,7 +468,7 @@ def main() -> None:
             db.delete(stale_question)
 
         db.commit()
-        print("V1 fictional KLS demo seeded")
+        print("V1 fictional FANUC lathe demo seeded")
         print(f"machine_id={machine.id} revision_id={revision.id} post_record_id={draft.id}")
         print(f"document_id={document.id} site_standard_id={standard.id} custom_logic_id={logic.id}")
         print("FICTIONAL SAMPLE — NOT FOR MACHINE USE")

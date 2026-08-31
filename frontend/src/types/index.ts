@@ -525,10 +525,20 @@ export interface AssembledPostDraft {
 
 export interface MachineKnowledgeFact {
   id: number; post_record_id: number; category: string; fact_key: string; name: string;
-  value_json: unknown; unit: string | null; status: string; source_document_id: number | null;
+  value_json: unknown; unit: string | null; status: string; post_review_status: "available_from_machine" | "needs_information" | "reviewed_for_post" | "not_applicable"; source_document_id: number | null;
   source_label: string | null; source_location: string | null; reviewer: string | null;
   reviewed_at: string | null; review_note: string | null; created_at: string; updated_at: string;
   used_by: Array<{ type: string; id: number; label: string }>;
+}
+
+export interface ManualMachineInformationField {
+  fact_key: string; label: string; category: string; data_type: string; units: string[];
+}
+
+export interface ManualMachineInformation {
+  id: number; machine_profile_id: number; revision_id: number; fact_key: string; label: string; category: string;
+  value: unknown; unit: string | null; source_basis: string; source_label: string; source_detail: string | null;
+  notes: string | null; review_status: string; proposal_id: number | null;
 }
 
 export interface OFGSetting {
@@ -562,7 +572,8 @@ export interface PostStandardApplication {
 }
 
 export interface CustomLogicItem {
-  id: number; post_record_id: number; name: string; category: string; reason: string;
+  id: number; post_record_id: number; related_ofg_setting_id: number | null; name: string; category: string; reason: string;
+  desired_behavior: string | null; runtime_trigger: string | null;
   implementation_type: string; status: string; evidence_ids_json: number[]; site_standard_ids_json: number[];
   source_format: string; source_reference: string | null; reviewer: string | null;
   review_note: string | null; created_at: string; updated_at: string;

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
+import { ActionMenu, type ActionMenuItem } from "../components/ActionMenu";
 import { PageHeader } from "../components/PageHeader";
 import type { DocumentType, MachineProfile, SourceDocument } from "../types";
 
@@ -67,8 +68,21 @@ export function DocumentsPage() {
     setDocuments((current) => current.filter((document) => document.id !== item.id));
   }
 
+  function documentActions(item: SourceDocument): ActionMenuItem[] {
+    const actions: ActionMenuItem[] = [
+      { label: "Extract Information", to: `/machines/${machineId}/profile-extraction/new` },
+      { label: "Ask Machine Assistant", to: `/machine-assistant?machine=${machineId}` },
+    ];
+    if (item.processing_status === "failed") actions.push({
+      label: "Reprocess Document",
+      onSelect: () => void api.reprocessDocument(item.id).then(() => api.listDocuments(Number(machineId)).then(setDocuments)),
+    });
+    actions.push({ label: "Delete Document", danger: true, divider: true, onSelect: () => void remove(item) });
+    return actions;
+  }
+
   return <section className="page">
-    <PageHeader eyebrow="Machine references" title="Documents" description="Upload and review machine/controller documentation used to build Machine Knowledge." />
+    <PageHeader eyebrow="Machine references" title="Documents" description="Upload and review machine/controller documentation used to build reviewed Machine Information." />
     <div className="reference-toolbar">
       <label>Machine<select aria-label="Machine profile" value={machineId} onChange={(event) => setMachineId(event.target.value)}>
         {!machines.length && <option value="">No machine profiles available</option>}
@@ -97,7 +111,7 @@ export function DocumentsPage() {
     <section className="panel document-library final-document-library">
       <header><div><span className="eyebrow">Selected machine</span><h2>Document library</h2></div><small>{documents.length} documents</small></header>
       {!documents.length ? <div className="compact-empty">No documents uploaded for this machine.</div> :
-      <div className="table-wrap"><table><thead><tr><th>Document</th><th>Machine</th><th>Type</th><th>Extraction Status</th><th>AI Use</th><th>Action</th></tr></thead><tbody>{documents.map((item) => <tr key={item.id}><td><strong>{item.title}</strong><small>{item.original_filename}</small>{item.processing_error && <span className="processing-error">{item.processing_error}</span>}</td><td>{machines.find((machine) => machine.id === Number(machineId))?.name || "Selected machine"}</td><td>{item.document_type.replaceAll("_", " ")}</td><td><span className={`document-status ${item.processing_status}`}>{item.processing_status}</span></td><td>{item.ai_post_builder_allowed ? "Reviewed for advisory AI" : "Local / deterministic"}</td><td><div className="document-row-actions"><Link to={`/documents/${item.id}`}>Open</Link><Link to={`/machines/${machineId}/profile-extraction/new`}>Extract Knowledge</Link><Link to={`/machine-assistant?machine=${machineId}`}>Ask Machine Assistant</Link>{item.processing_status === "failed" && <button onClick={() => api.reprocessDocument(item.id).then(() => api.listDocuments(Number(machineId)).then(setDocuments))}>Reprocess</button>}<button className="danger-link" onClick={() => void remove(item)}>Delete</button></div></td></tr>)}</tbody></table></div>}
+      <div className="table-wrap"><table><thead><tr><th>Document</th><th>Machine</th><th>Type</th><th>Extraction Status</th><th>AI Use</th><th>Action</th></tr></thead><tbody>{documents.map((item) => <tr key={item.id}><td><strong>{item.title}</strong><small>{item.original_filename}</small>{item.processing_error && <span className="processing-error">{item.processing_error}</span>}</td><td>{machines.find((machine) => machine.id === Number(machineId))?.name || "Selected machine"}</td><td>{item.document_type.replaceAll("_", " ")}</td><td><span className={`document-status ${item.processing_status}`}>{item.processing_status}</span></td><td>{item.ai_post_builder_allowed ? "Reviewed for advisory AI" : "Local / deterministic"}</td><td><div className="document-row-actions"><Link className="button tertiary document-open-action" to={`/documents/${item.id}`}>Open →</Link><ActionMenu label={`Actions for ${item.title}`} triggerLabel="More" items={documentActions(item)} /></div></td></tr>)}</tbody></table></div>}
     </section>
   </section>;
 }

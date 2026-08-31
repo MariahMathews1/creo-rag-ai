@@ -43,7 +43,7 @@ export function ManualAssistantPage() {
   const toggleType = (value: DocumentType) => setTypes((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
   return <section className="page">
     <PageHeader eyebrow="Machine-specific reference" title="Machine Assistant" description="Find technical information in documentation associated with the selected machine." action={<Link className="button secondary" to={`/documents?machine=${machineId}`}>Manage documents</Link>} />
-    <p className="assistant-boundary"><strong>Advisory lookup:</strong> answers do not approve Machine Knowledge or create final post logic. Engineer review remains required.</p>
+    <p className="assistant-boundary"><strong>Advisory lookup:</strong> answers do not approve Machine Information or create final post logic. Engineer review remains required.</p>
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="assistant-layout">
       <aside className="session-rail"><label>Machine<select value={machineId} onChange={(event) => { setMachineId(event.target.value); setSessionId(""); }}><option value="">Select machine</option>{machines.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><button className="button primary" onClick={() => void newSession()}>+ New session</button><h2>Session history</h2>{sessions.map((item) => <button className={sessionId === String(item.id) ? "active" : ""} onClick={() => setSessionId(String(item.id))} key={item.id}><strong>{item.title}</strong><small>{new Date(item.updated_at).toLocaleDateString()}</small></button>)}</aside>

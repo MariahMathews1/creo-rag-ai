@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, test, vi } from "vitest";
@@ -29,6 +29,20 @@ test("shows upload form, processing statuses, and extraction failure", async () 
   expect(screen.getByText(/failed$/, { selector: ".document-status" })).toBeInTheDocument();
   for (const heading of ["Document", "Machine", "Type", "Extraction Status", "AI Use", "Action"]) expect(screen.getByRole("columnheader", { name: heading })).toBeInTheDocument();
   expect(screen.queryByText(/Review Eligibility/i)).not.toBeInTheDocument();
+});
+
+test("uses a compact accessible action menu for each uploaded document", async () => {
+  const user = userEvent.setup();
+  render(<MemoryRouter><DocumentsPage /></MemoryRouter>);
+  const title = await screen.findByText("Ready Manual");
+  const row = title.closest("tr")!;
+  expect(within(row).getByRole("link", { name: "Open →" })).toHaveAttribute("href", "/documents/2");
+  expect(within(row).queryByText("Extract Information")).not.toBeInTheDocument();
+  await user.click(within(row).getByRole("button", { name: "Actions for Ready Manual" }));
+  const menu = screen.getByRole("menu", { name: "Actions for Ready Manual" });
+  expect(within(menu).getByRole("menuitem", { name: "Extract Information" })).toHaveAttribute("href", "/machines/1/profile-extraction/new");
+  expect(within(menu).getByRole("menuitem", { name: "Ask Machine Assistant" })).toHaveAttribute("href", "/machine-assistant?machine=1");
+  expect(within(menu).getByRole("menuitem", { name: "Delete Document" })).toHaveClass("danger");
 });
 
 test("uploads a selected document", async () => {

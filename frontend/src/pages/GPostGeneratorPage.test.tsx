@@ -189,7 +189,7 @@ test("landing page shows one-post management controls instead of the CL test har
 test("landing page provides the specified empty state", async () => {
   vi.mocked(api.listGPostDrafts).mockResolvedValue([] as never);
   render(<MemoryRouter><GPostGeneratorPage /></MemoryRouter>);
-  expect(await screen.findByText("No posts match these filters.")).toBeInTheDocument();
+  expect(await screen.findByText("No Post Records yet.")).toBeInTheDocument();
   expect(screen.getAllByRole("button", { name: "Create Post" }).length).toBeGreaterThan(0);
 });
 
@@ -200,9 +200,9 @@ test("guided creation auto-selects a compatible foundation and omits reference p
   expect(await screen.findByText("Select Machine", { selector: "h1" })).toBeInTheDocument();
   expect(screen.queryByText("Reference Programs")).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Select" }));
-  expect(screen.getByText("Post Setup", { selector: "h1" })).toBeInTheDocument();
+  expect(screen.getByText("Review Post Inputs", { selector: "h1" })).toBeInTheDocument();
   expect(screen.getByText("FANUC Lathe")).toBeInTheDocument();
-  expect(screen.getByText("Machine Knowledge")).toBeInTheDocument();
+  expect(screen.getByText("Machine Information")).toBeInTheDocument();
   expect(screen.getByText("1 available")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Continue" }));
   expect(screen.getByText("FANUC Lathe")).toBeInTheDocument();
@@ -215,7 +215,7 @@ test("guided creation auto-selects a compatible foundation and omits reference p
 
 test("machine query preselects the machine in Post creation", async () => {
   render(<MemoryRouter initialEntries={["/gpost?machine=1"]}><Routes><Route path="/gpost" element={<GPostGeneratorPage />} /></Routes></MemoryRouter>);
-  expect(await screen.findByText("Post Setup", { selector: "h1" })).toBeInTheDocument();
+  expect(await screen.findByText("Review Post Inputs", { selector: "h1" })).toBeInTheDocument();
   expect(screen.getByText(machine.name)).toBeInTheDocument();
   expect(screen.getByText("FANUC Lathe")).toBeInTheDocument();
 });
@@ -224,7 +224,7 @@ test("post list search, filters, archive, rename, and delete are explicit", asyn
   const user = userEvent.setup(); render(<MemoryRouter><GPostGeneratorPage /></MemoryRouter>);
   await screen.findByText(draft.name);
   await user.type(screen.getByLabelText("Search"), "missing");
-  expect(screen.getByText("No posts match these filters.")).toBeInTheDocument();
+  expect(screen.getByText("No Post Records yet.")).toBeInTheDocument();
   await user.clear(screen.getByLabelText("Search")); await user.selectOptions(screen.getByLabelText("Machine"), "1");
   await user.click(screen.getByRole("button", { name: `More actions for ${draft.name}` })); await user.click(screen.getByRole("menuitem", { name: "Rename" }));
   const input = screen.getByLabelText("Post Name"); await user.clear(input); await user.type(input, "Renamed Post"); await user.click(screen.getByRole("button", { name: "Save Name" }));

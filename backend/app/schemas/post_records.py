@@ -15,6 +15,7 @@ class MachineFactWrite(BaseModel):
     value_json: Any | None = None
     unit: str | None = None
     status: str = "needs_review"
+    post_review_status: str = "available_from_machine"
     source_document_id: int | None = None
     source_label: str | None = None
     source_location: str | None = None
@@ -110,9 +111,12 @@ class StandardApplicationRead(StandardApplicationWrite, ORMRead):
 
 
 class CustomLogicWrite(BaseModel):
+    related_ofg_setting_id: int | None = None
     name: str = Field(min_length=1, max_length=180)
     category: str
     reason: str = Field(min_length=1)
+    desired_behavior: str | None = None
+    runtime_trigger: str | None = None
     implementation_type: str = "FIL / CIMFIL"
     status: str = "identified"
     evidence_ids_json: list[int] = Field(default_factory=list)

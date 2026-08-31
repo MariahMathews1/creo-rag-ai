@@ -7,6 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.db.alembic import upgrade_database
 from app.db.session import SessionLocal
 from app.models.entities import MachineProfile, utc_now
 from app.models.gpost import GPostDraft
@@ -86,8 +87,9 @@ def main() -> None:
 
     print(f"Demo reset target: {settings.resolved_database_url}")
     print(f"Environment: {settings.app_environment}")
-    print("Action: archive known disposable legacy demos, then restore the canonical KLS walkthrough.")
+    print("Action: archive known disposable legacy demos, then restore the canonical FANUC lathe walkthrough.")
     print("User-created machines, documents, Post Records, and schema are retained.")
+    upgrade_database()
     with SessionLocal() as db:
         machines, drafts = archive_legacy_demo_rows(db)
     print(f"Archived legacy demo machines: {len(machines)}")

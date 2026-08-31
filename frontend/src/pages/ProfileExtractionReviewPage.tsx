@@ -37,6 +37,7 @@ type BatchAction = "accept" | "defer" | "reject" | "not_applicable";
 
 const QUEUE_KEYS = new Set<string>(REVIEW_QUEUES.map(([key]) => key));
 const VIEW_KEYS = new Set<string>(["detailed", "compact", "checklist"]);
+const IMPORTANT_MISSING_KEYS = new Set(["machine_type", "controller_name", "controller_model", "axis_count", "x_travel", "y_travel", "z_travel", "max_spindle_rpm", "supported_work_offsets", "drilling_cycles", "turning_cycles"]);
 const sessionKey = (runId: number, suffix: string) =>
   `profile-review:${runId}:${suffix}`;
 
@@ -118,7 +119,7 @@ export function ProfileExtractionReviewPage() {
   const [revisions, setRevisions] = useState<MachineProfileRevision[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState(params.get("manualSaved") ? "Machine Information saved; the missing item is resolved." : "");
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -152,7 +153,7 @@ export function ProfileExtractionReviewPage() {
   const [rerunBusy, setRerunBusy] = useState(false);
 
   const [sourceContent, setSourceContent] = useState<DocumentContent | null>(null);
-  const [technicalView, setTechnicalView] = useState(import.meta.env.MODE === "test");
+  const [technicalView] = useState(import.meta.env.MODE === "test" && params.get("v1") !== "1");
   const [sourceLoading, setSourceLoading] = useState(false);
   const sourceDocumentId = Number(params.get("source") ?? 0);
   const sourceEvidenceId = Number(params.get("citation") ?? 0);
@@ -738,13 +739,23 @@ export function ProfileExtractionReviewPage() {
     catch (cause) { setError(cause instanceof Error ? cause.message : "Batch confirmation failed"); }
   }
 
-  if (!technicalView) return <section className="page extraction-review-page v1-extraction-review">
+  if (!technicalView) {
+    const proposedValues = proposals.filter((item) => item.proposal_status === "found" && item.review_status === "pending");
+    const ambiguousValues = proposals.filter((item) => ["ambiguous", "conflicting", "derived"].includes(item.proposal_status) && item.review_status === "pending");
+    const importantMissing = proposals.filter((item) => item.proposal_status === "not_found" && item.review_status === "pending" && IMPORTANT_MISSING_KEYS.has(item.field_key));
+    const reviewedValues = proposals.filter((item) => ["accepted", "accepted_with_edit", "manually_entered"].includes(item.review_status));
+    const proposalCard = (proposal: ProfileProposal, label: string) => { const evidence = proposal.evidence[0]; return <article className="panel" key={proposal.id}><div><h3>{proposal.field_label}</h3><strong>{showValue(proposal.reviewed_value_json ?? proposal.proposed_value_json) || "Not found"}{proposal.unit ? ` ${proposal.unit}` : ""}</strong>{evidence && <p>Source: {evidence.document_title} · p.{evidence.page_start ?? "—"}</p>}</div><span className="document-status processing">{label}</span><button className="button tertiary" onClick={() => void confirmSimple(proposal)}>Review</button></article>; };
+    return <section className="page extraction-review-page v1-extraction-review">
     <PageHeader eyebrow="Machine information" title="Review Found Information" description={`${summary.machine_name} · ${summary.documents_analyzed} machine documents checked`} action={<Link className="button secondary" to={`/machines/${machine}/profile-extraction/new`}>Choose Different Documents</Link>} />
     {error && <p role="alert" className="form-error">{error}</p>}<div className="review-toast" aria-live="polite">{toast && <span>✓ {toast}</span>}</div>
-    <section className="panel simple-extraction-summary"><div><strong>{summary.found}</strong><span>Found</span></div><div><strong>{summary.pending}</strong><span>Needs Review</span></div><div><strong>{summary.accepted + summary.accepted_with_edit}</strong><span>Confirmed</span></div><button className="button primary" disabled={!highCandidates.length} onClick={() => void confirmAllClearFields()}>Confirm All Clear Fields</button></section>
-    <div className="simple-extraction-list">{proposals.map((proposal) => { const evidence = proposal.evidence[0]; const confirmed = proposal.review_status === "accepted" || proposal.review_status === "accepted_with_edit"; const status = confirmed ? "Confirmed" : proposal.proposal_status === "found" ? "Found" : "Needs Review"; return <article className="panel" key={proposal.id}><div><h2>{proposal.field_label}</h2><strong>{showValue(proposal.reviewed_value_json ?? proposal.proposed_value_json) || "Not found"}{proposal.unit ? ` ${proposal.unit}` : ""}</strong>{evidence && <p>Source: {evidence.document_title} · Page {evidence.page_start ?? "—"}</p>}</div><span className={`document-status ${confirmed ? "ready" : proposal.proposal_status === "found" ? "processing" : "failed"}`}>{status}</span>{!confirmed && proposal.proposal_status === "found" && <button onClick={() => void confirmSimple(proposal)}>Confirm</button>}<details><summary>Technical Extraction Details</summary><dl><div><dt>Confidence</dt><dd>{Math.round(proposal.confidence * 100)}%</dd></div><div><dt>Proposal status</dt><dd>{proposal.proposal_status}</dd></div><div><dt>Review status</dt><dd>{proposal.review_status}</dd></div></dl>{evidence && <blockquote>{evidence.excerpt}</blockquote>}</details></article>; })}</div>
-    <details className="panel"><summary>Advanced</summary><p>Open the complete evidence-authority, filtering, comparison, and proposal-management workspace.</p><button onClick={() => setTechnicalView(true)}>Open Technical Review Workspace</button></details>
+    <section className="panel simple-extraction-summary" aria-label="Extraction Result"><div><strong>{proposedValues.length}</strong><span>proposed values</span></div><div><strong>{ambiguousValues.length}</strong><span>ambiguous values</span></div><div><strong>{importantMissing.length}</strong><span>important values not found</span></div><div><strong>{reviewedValues.length}</strong><span>reviewed</span></div><button className="button primary" disabled={!highCandidates.length} onClick={() => void confirmAllClearFields()}>Confirm All Clear Fields</button></section>
+    {run.detected_variants_json.length > 1 && <section className="panel simplified-variant"><h2>Multiple machine variants were found in this document.</h2><p>{run.detected_variants_json.join(" · ")}</p><label>Selected variant<select value={variantSelection || run.selected_machine_variant || ""} onChange={(event) => setVariantSelection(event.target.value)}>{run.detected_variants_json.map((item) => <option key={item}>{item}</option>)}</select></label><button className="button secondary" onClick={() => setToast(`Variant ${variantSelection || run.selected_machine_variant} confirmed.`)}>Confirm Variant</button></section>}
+    <section className="simple-review-group"><header><h2>Proposed Values</h2><span>{proposedValues.length}</span></header><div className="simple-extraction-list">{proposedValues.map((item) => proposalCard(item, "Proposed"))}{!proposedValues.length && <p>No proposed values are waiting for review.</p>}</div></section>
+    <section className="simple-review-group"><header><h2>Needs Review</h2><span>{ambiguousValues.length}</span></header><div className="simple-extraction-list">{ambiguousValues.map((item) => proposalCard(item, "Needs Review"))}{!ambiguousValues.length && <p>No ambiguous values were found.</p>}</div></section>
+    <section className="simple-review-group"><header><h2>Important Information Not Found</h2><span>{importantMissing.length}</span></header>{importantMissing.map((proposal) => <article className="panel important-missing" key={proposal.id}><div><h3>{proposal.field_label}</h3><p>This value may matter to Post Builder configuration.</p></div><div className="missing-information-actions"><Link className="button tertiary" to={`/machines/${machine}/machine-information/manual?run=${id}&proposal=${proposal.id}&field=${encodeURIComponent(proposal.field_key)}`}>Enter Manually</Link><Link className="button tertiary" to={`/documents?machine=${machine}`}>Find in Other Documents</Link><Link className="button tertiary" to={`/machine-assistant?machine=${machine}`}>Ask Machine Assistant</Link></div></article>)}{!importantMissing.length && <p>No important workflow information is missing.</p>}</section>
+    <footer className="extraction-review-navigation"><Link className="button secondary" to={`/documents?machine=${machine}`}>Back to Documents</Link><Link className="button primary" to={`/machines/${machine}/machine-knowledge`}>Save Reviewed Information</Link><Link className="button secondary" to={`/machines/${machine}/machine-knowledge`}>Continue to Machine Information</Link></footer>
   </section>;
+  }
 
   return <section className="page extraction-review-page">
     <PageHeader

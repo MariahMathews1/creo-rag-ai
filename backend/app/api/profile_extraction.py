@@ -11,6 +11,8 @@ from app.models.profile_extraction import (
     MachineProfileFieldSource, MachineProfileRevision, ProfileExtractionRun,
     ProfileFieldProposal,
 )
+from app.models.gpost import GPostDraft, MachineKnowledgeFact, OFGSetting
+from app.ofg.domain import DEFINITIONS
 from app.profile_extraction.registry import FIELD_MAP
 from app.profile_extraction.service import execute_extraction
 from app.profile_extraction.units import UNIT_ALIASES, normalize_unit
@@ -18,6 +20,7 @@ from app.schemas.profile_extraction import (
     AcceptEligibleHighConfidenceRequest, ApplyDraftRequest, ApprovalRequest,
     BatchReviewFailure, BatchReviewRequest, BatchReviewResponse,
     ExtractionRunRead, ExtractionStart, ProposalRead, ProposalReview,
+    ManualInformationFieldRead, ManualInformationRead, ManualInformationWrite,
     RejectionRequest, ReviewCategorySummary, ReviewEventRequest,
     ReviewQueueRead, ReviewSummaryRead, RevisionRead,
 )
@@ -46,6 +49,33 @@ REVIEW_STATUSES = {
 PHYSICAL_CLAIM_CATEGORIES = {
     "axis_limits", "spindle", "feed_and_motion", "tooling", "workholding",
     "capabilities", "safety_and_setup",
+}
+MANUAL_SOURCE_BASIS = {
+    "engineer_entry": "Engineer Entry", "installed_machine_configuration": "Installed Machine Configuration",
+    "machine_nameplate": "Machine Nameplate", "machine_manual": "Machine Manual",
+    "controller_manual": "Controller Manual", "site_standard": "Site Standard",
+    "other_approved_source": "Other Approved Source",
+}
+MANUAL_FIELD_KEYS = (
+    "manufacturer", "model", "machine_type", "controller_name", "controller_manufacturer", "controller_model",
+    "controller_version", "axis_count", "x_travel", "y_travel", "z_travel", "max_spindle_rpm",
+    "max_feed_rate", "rapid_traverse_rate", "supported_work_offsets", "supported_g_codes", "supported_m_codes",
+    "canned_cycles", "turning_cycles", "drilling_cycles", "tool_change_template", "safe_start_commands",
+    "coolant_start_template", "program_number_format", "sequence_number_format",
+)
+MANUAL_CATEGORY_LABELS = {
+    "identity": "Identity", "controller": "Controller", "axis_limits": "Axes / Kinematics", "spindle": "Spindle",
+    "feed_and_motion": "Feed / Motion", "tooling": "Tooling", "coolant": "Coolant",
+    "programming": "Programming / Codes", "programming_codes": "Programming / Codes",
+    "capabilities": "Cycles / Capabilities", "safety_and_setup": "Additional Machine Information",
+}
+PROFILE_TO_POST_FACT = {
+    "machine_type": "machine_type", "controller_name": "controller", "controller_model": "controller",
+    "axis_count": "axes", "x_travel": "x_travel", "y_travel": "y_travel", "z_travel": "z_travel",
+    "max_spindle_rpm": "max_spindle_rpm", "max_feed_rate": "max_feed_rate",
+    "supported_work_offsets": "work_offsets", "canned_cycles": "supported_cycles", "turning_cycles": "supported_cycles",
+    "drilling_cycles": "supported_cycles", "tool_change_template": "tool_change", "safe_start_commands": "safe_start",
+    "coolant_start_template": "coolant_on",
 }
 
 
@@ -87,6 +117,269 @@ def ensure_initial_revision(machine: MachineProfile, db: Session) -> MachineProf
     )
     db.add(revision); db.flush(); machine.active_revision_id = revision.id; db.flush()
     return revision
+
+
+def _manual_category(definition) -> str:
+    return MANUAL_CATEGORY_LABELS.get(definition.category, definition.category.replace("_", " ").title())
+
+
+def _manual_value_on_revision(revision: MachineProfileRevision, field_key: str, value: object) -> None:
+    if field_key == "machine_model":
+        revision.model = str(value)
+    elif field_key in REVISION_FIELDS:
+        setattr(revision, field_key, value)
+    elif field_key == "supported_work_offsets":
+        revision.supported_work_offsets_json = value if isinstance(value, list) else [value]
+    elif field_key == "supported_g_codes":
+        revision.approved_g_codes_json = value if isinstance(value, list) else [value]
+    elif field_key == "supported_m_codes":
+        revision.approved_m_codes_json = value if isinstance(value, list) else [value]
+    elif FIELD_MAP[field_key].category == "capabilities":
+        revision.capabilities_json = {**(revision.capabilities_json or {}), field_key: value}
+    else:
+        revision.machine_configuration_json = {**(revision.machine_configuration_json or {}), field_key: value}
+
+
+def _clear_manual_value_on_revision(revision: MachineProfileRevision, field_key: str) -> None:
+    if field_key in REVISION_FIELDS:
+        setattr(revision, field_key, None)
+    elif field_key == "supported_work_offsets":
+        revision.supported_work_offsets_json = []
+    elif field_key == "supported_g_codes":
+        revision.approved_g_codes_json = []
+    elif field_key == "supported_m_codes":
+        revision.approved_m_codes_json = []
+    elif FIELD_MAP[field_key].category == "capabilities":
+        values = dict(revision.capabilities_json or {}); values.pop(field_key, None)
+        revision.capabilities_json = values
+    else:
+        values = dict(revision.machine_configuration_json or {}); values.pop(field_key, None)
+        revision.machine_configuration_json = values
+
+
+def _manual_value_from_revision(revision: MachineProfileRevision, field_key: str, *, effective: bool = False) -> object | None:
+    if field_key in REVISION_FIELDS:
+        return getattr(revision, field_key)
+    if field_key == "supported_work_offsets": return revision.supported_work_offsets_json
+    if field_key == "supported_g_codes": return revision.approved_g_codes_json
+    if field_key == "supported_m_codes": return revision.approved_m_codes_json
+    if FIELD_MAP[field_key].category == "capabilities":
+        return (revision.capabilities_json or {}).get(field_key)
+    value = (revision.machine_configuration_json or {}).get(field_key)
+    if value is None and effective and field_key in {"x_travel", "y_travel", "z_travel"}:
+        axis = field_key[0]
+        limits = [getattr(revision, f"{axis}_min"), getattr(revision, f"{axis}_max")]
+        return limits if any(item is not None for item in limits) else None
+    return value
+
+
+def _copy_field_source(source: MachineProfileFieldSource, revision_id: int) -> MachineProfileFieldSource:
+    return MachineProfileFieldSource(
+        machine_profile_revision_id=revision_id, field_key=source.field_key,
+        value_json=source.value_json, unit=source.unit, source_type=source.source_type,
+        document_id=source.document_id, document_chunk_id=source.document_chunk_id,
+        profile_field_proposal_id=source.profile_field_proposal_id,
+        page_start=source.page_start, page_end=source.page_end,
+        section_title=source.section_title, excerpt=source.excerpt,
+        review_status=source.review_status, reviewed_by=source.reviewed_by,
+        review_note=source.review_note,
+    )
+
+
+def _sync_machine_from_revision(machine: MachineProfile, revision: MachineProfileRevision) -> None:
+    for key in ("manufacturer", "model", "controller_name", "controller_manufacturer", "controller_model", "controller_version",
+                "axis_count", "x_min", "x_max", "y_min", "y_max", "z_min", "z_max", "max_spindle_rpm", "max_feed_rate",
+                "safe_start_template", "tool_change_template", "program_end_template", "notes"):
+        value = getattr(revision, key)
+        if value is not None: setattr(machine, key, value)
+    machine.supported_work_offsets = revision.supported_work_offsets_json
+    machine.approved_g_codes = revision.approved_g_codes_json
+    machine.approved_m_codes = revision.approved_m_codes_json
+
+
+def _sync_manual_value_to_posts(db: Session, machine_id: int, field_key: str, value: object | None, unit: str | None,
+                                source_label: str, source_detail: str | None, review_status: str,
+                                review_note: str = "Manually entered machine information.",
+                                setting_source_type: str = "Engineer Entry") -> None:
+    post_key = PROFILE_TO_POST_FACT.get(field_key)
+    if not post_key: return
+    definition = next((item for item in DEFINITIONS if item.fact_key == post_key), None)
+    for draft in db.scalars(select(GPostDraft).where(GPostDraft.machine_profile_id == machine_id,
+                                                      GPostDraft.status.notin_(("archived", "superseded")))):
+        fact = db.scalar(select(MachineKnowledgeFact).where(MachineKnowledgeFact.post_record_id == draft.id,
+                                                            MachineKnowledgeFact.fact_key == post_key))
+        if fact is None:
+            fact = MachineKnowledgeFact(post_record_id=draft.id, fact_key=post_key,
+                name=definition.name if definition else FIELD_MAP[field_key].display_name,
+                category=definition.category if definition else _manual_category(FIELD_MAP[field_key]))
+            db.add(fact); db.flush()
+        fact.value_json = value; fact.unit = unit
+        fact.status = review_status if value is not None else "unknown"
+        fact.post_review_status = "available_from_machine" if review_status == "confirmed" and value is not None else "needs_information"
+        fact.source_label = source_label; fact.source_location = source_detail; fact.reviewer = "Local Engineer"
+        fact.review_note = review_note
+        for setting in db.scalars(select(OFGSetting).where(OFGSetting.post_record_id == draft.id)):
+            if fact.id not in (setting.source_machine_fact_ids_json or []): continue
+            if setting.setting_key == "axis_limits":
+                axis_facts = list(db.scalars(select(MachineKnowledgeFact).where(
+                    MachineKnowledgeFact.post_record_id == draft.id,
+                    MachineKnowledgeFact.fact_key.in_(("x_travel", "y_travel", "z_travel")),
+                )))
+                setting.value_json = {
+                    item.fact_key[0].upper(): item.value_json
+                    for item in axis_facts if item.value_json is not None
+                }
+            else:
+                setting.value_json = value
+            setting.unit = unit
+            setting.source_type = setting_source_type
+            if setting.status not in {"reviewed", "not_applicable"}:
+                setting.status = "needs_review" if review_status == "confirmed" else "needs_information"
+
+
+@router.get("/machines/{machine_id}/machine-information/fields", response_model=list[ManualInformationFieldRead])
+def list_manual_information_fields(machine_id: int, db: Session = Depends(get_db)):
+    machine_or_404(machine_id, db)
+    return [ManualInformationFieldRead(fact_key=key, label=FIELD_MAP[key].display_name,
+        category=_manual_category(FIELD_MAP[key]), data_type=FIELD_MAP[key].data_type,
+        units=list(FIELD_MAP[key].allowed_units)) for key in MANUAL_FIELD_KEYS if key in FIELD_MAP]
+
+
+@router.get("/machines/{machine_id}/machine-information", response_model=list[ManualInformationRead])
+def list_manual_information(machine_id: int, db: Session = Depends(get_db)):
+    machine = machine_or_404(machine_id, db); revision = ensure_initial_revision(machine, db); db.commit()
+    rows = list(db.scalars(select(MachineProfileFieldSource).where(
+        MachineProfileFieldSource.machine_profile_revision_id == revision.id).order_by(MachineProfileFieldSource.id.desc())))
+    result, seen = [], set()
+    for row in rows:
+        if row.field_key in seen or row.field_key not in FIELD_MAP: continue
+        seen.add(row.field_key); definition = FIELD_MAP[row.field_key]
+        result.append(ManualInformationRead(id=row.id, machine_profile_id=machine.id, revision_id=revision.id,
+            fact_key=row.field_key, label=definition.display_name, category=_manual_category(definition), value=row.value_json,
+            unit=row.unit, source_basis=row.source_type, source_label=MANUAL_SOURCE_BASIS.get(row.source_type, row.source_type.replace("_", " ").title()),
+            source_detail=row.section_title, notes=row.review_note, review_status=row.review_status,
+            proposal_id=row.profile_field_proposal_id))
+    return result
+
+
+@router.post("/machines/{machine_id}/machine-information/manual", response_model=ManualInformationRead, status_code=201)
+def save_manual_information(machine_id: int, payload: ManualInformationWrite, db: Session = Depends(get_db)):
+    machine = machine_or_404(machine_id, db)
+    if payload.fact_key not in MANUAL_FIELD_KEYS or payload.fact_key not in FIELD_MAP: raise HTTPException(422, "Unsupported Machine Information field")
+    if payload.source_basis not in MANUAL_SOURCE_BASIS: raise HTTPException(422, "Unsupported source/basis")
+    definition = FIELD_MAP[payload.fact_key]
+    unit = normalize_unit(payload.unit) if payload.unit else None
+    if payload.unit and unit is None: raise HTTPException(422, "Unsupported unit")
+    if unit and definition.allowed_units and unit not in definition.allowed_units: raise HTTPException(422, "Unit is not valid for this field")
+    value = payload.value
+    if definition.data_type in {"number", "integer"}:
+        try: value = int(value) if definition.data_type == "integer" else float(value)
+        except (TypeError, ValueError): raise HTTPException(422, "A numeric value is required")
+    document = db.get(SourceDocument, payload.document_id) if payload.document_id else None
+    if payload.document_id and (not document or document.machine_profile_id != machine.id): raise HTTPException(422, "Document must belong to this machine")
+    active = ensure_initial_revision(machine, db)
+    number = (db.scalar(select(func.max(MachineProfileRevision.revision_number)).where(MachineProfileRevision.machine_profile_id == machine.id)) or 0) + 1
+    data = _revision_data(active); data.update(machine_profile_id=machine.id, revision_number=number, status="approved",
+        source_type="manual_entry", created_from_revision_id=active.id, review_summary=payload.notes, approved_at=utc_now())
+    revision = MachineProfileRevision(**data); _manual_value_on_revision(revision, payload.fact_key, value)
+    db.add(revision); db.flush(); active.status = "superseded"; machine.active_revision_id = revision.id; _sync_machine_from_revision(machine, revision)
+    prior_sources = list(db.scalars(select(MachineProfileFieldSource).where(
+        MachineProfileFieldSource.machine_profile_revision_id == active.id,
+        MachineProfileFieldSource.field_key != payload.fact_key,
+    )))
+    for prior in prior_sources:
+        db.add(_copy_field_source(prior, revision.id))
+    source = MachineProfileFieldSource(machine_profile_revision_id=revision.id, field_key=payload.fact_key, value_json=value,
+        unit=unit, source_type=payload.source_basis, document_id=payload.document_id, profile_field_proposal_id=payload.proposal_id,
+        section_title=payload.source_detail, review_status=payload.review_status, reviewed_by="local_user", review_note=payload.notes)
+    db.add(source); db.flush()
+    if payload.proposal_id:
+        proposal = db.get(ProfileFieldProposal, payload.proposal_id)
+        if not proposal or proposal.extraction_run.machine_profile_id != machine.id or proposal.field_key != payload.fact_key:
+            raise HTTPException(422, "The missing-information item does not match this machine field")
+        proposal.review_status = "manually_entered"; proposal.reviewed_value_json = value; proposal.unit = unit
+        proposal.review_note = payload.notes or f"Entered manually from {MANUAL_SOURCE_BASIS[payload.source_basis]}."
+        proposal.reviewed_by = "local_user"; proposal.reviewed_at = utc_now(); refresh_documentation_coverage(proposal.extraction_run_id, db)
+    source_label = document.title if document else MANUAL_SOURCE_BASIS[payload.source_basis]
+    _sync_manual_value_to_posts(db, machine.id, payload.fact_key, value, unit, source_label, payload.source_detail, payload.review_status)
+    db.add(AuditEvent(event_type="machine_information_manually_entered", machine_profile_id=machine.id,
+        metadata_json={"field_key": payload.fact_key, "review_status": payload.review_status, "proposal_id": payload.proposal_id}))
+    db.commit()
+    return ManualInformationRead(id=source.id, machine_profile_id=machine.id, revision_id=revision.id,
+        fact_key=payload.fact_key, label=definition.display_name, category=_manual_category(definition), value=value, unit=unit,
+        source_basis=payload.source_basis, source_label=source_label, source_detail=payload.source_detail, notes=payload.notes,
+        review_status=payload.review_status, proposal_id=payload.proposal_id)
+
+
+@router.delete("/machines/{machine_id}/machine-information/{field_key}", status_code=204)
+def discard_machine_information(machine_id: int, field_key: str, db: Session = Depends(get_db)):
+    machine = machine_or_404(machine_id, db)
+    if field_key not in MANUAL_FIELD_KEYS or field_key not in FIELD_MAP:
+        raise HTTPException(404, "Machine Information field not found")
+    active = ensure_initial_revision(machine, db)
+    current_source = db.scalar(select(MachineProfileFieldSource).where(
+        MachineProfileFieldSource.machine_profile_revision_id == active.id,
+        MachineProfileFieldSource.field_key == field_key,
+    ).order_by(MachineProfileFieldSource.id.desc()))
+    if current_source is None:
+        raise HTTPException(404, "Machine Information entry not found")
+
+    baseline_revision = db.get(MachineProfileRevision, active.created_from_revision_id) if active.created_from_revision_id else None
+    baseline_source = None
+    while baseline_revision:
+        candidate = db.scalar(select(MachineProfileFieldSource).where(
+            MachineProfileFieldSource.machine_profile_revision_id == baseline_revision.id,
+            MachineProfileFieldSource.field_key == field_key,
+        ).order_by(MachineProfileFieldSource.id.desc()))
+        copied_current_extraction = (
+            current_source.source_type not in MANUAL_SOURCE_BASIS and candidate is not None
+            and candidate.source_type == current_source.source_type
+            and candidate.profile_field_proposal_id == current_source.profile_field_proposal_id
+            and candidate.document_chunk_id == current_source.document_chunk_id
+            and candidate.value_json == current_source.value_json
+        )
+        if candidate is None or (current_source.source_type in MANUAL_SOURCE_BASIS and candidate.source_type not in MANUAL_SOURCE_BASIS):
+            baseline_source = candidate; break
+        if current_source.source_type not in MANUAL_SOURCE_BASIS and not copied_current_extraction:
+            baseline_source = candidate; break
+        baseline_revision = db.get(MachineProfileRevision, baseline_revision.created_from_revision_id) if baseline_revision.created_from_revision_id else None
+
+    number = (db.scalar(select(func.max(MachineProfileRevision.revision_number)).where(
+        MachineProfileRevision.machine_profile_id == machine.id)) or 0) + 1
+    data = _revision_data(active); data.update(
+        machine_profile_id=machine.id, revision_number=number, status="approved",
+        source_type="manual_discard", created_from_revision_id=active.id,
+        review_summary=f"Discarded current {FIELD_MAP[field_key].display_name} entry.", approved_at=utc_now(),
+    )
+    revision = MachineProfileRevision(**data)
+    _clear_manual_value_on_revision(revision, field_key)
+    if baseline_revision:
+        baseline_value = _manual_value_from_revision(baseline_revision, field_key)
+        if baseline_value is not None: _manual_value_on_revision(revision, field_key, baseline_value)
+    db.add(revision); db.flush()
+    for source in db.scalars(select(MachineProfileFieldSource).where(
+        MachineProfileFieldSource.machine_profile_revision_id == active.id,
+        MachineProfileFieldSource.field_key != field_key,
+    )):
+        db.add(_copy_field_source(source, revision.id))
+    if baseline_source:
+        db.add(_copy_field_source(baseline_source, revision.id))
+    active.status = "superseded"; machine.active_revision_id = revision.id
+    _sync_machine_from_revision(machine, revision)
+    if hasattr(machine, field_key): setattr(machine, field_key, getattr(revision, field_key))
+    effective_value = _manual_value_from_revision(revision, field_key, effective=True)
+    source_label = "Previous Machine Information" if baseline_source else f"Machine profile revision {revision.revision_number}"
+    _sync_manual_value_to_posts(
+        db, machine.id, field_key, effective_value, baseline_source.unit if baseline_source else None,
+        source_label, baseline_source.section_title if baseline_source else None,
+        baseline_source.review_status if baseline_source else "needs_review",
+        review_note="Current Machine Information entry discarded; previous machine context restored where available.",
+        setting_source_type="Machine Knowledge",
+    )
+    db.add(AuditEvent(event_type="machine_information_discarded", machine_profile_id=machine.id,
+        metadata_json={"field_key": field_key, "discarded_source_type": current_source.source_type,
+                       "restored_revision_id": baseline_revision.id if baseline_revision else None}))
+    db.commit()
 
 
 @router.post("/machines/{machine_id}/profile-extraction-runs", response_model=ExtractionRunRead)

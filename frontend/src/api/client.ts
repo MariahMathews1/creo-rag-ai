@@ -24,7 +24,7 @@ import type {
   TranslationExplanationResponse, TranslationAIInvocation,
   PostBuilderProviderStatus, PostBuilderSectionResponse,
   PostBuilderEvidence, PostRuleDraft, PostSectionCompare, PostSectionDraft, PostSectionReadiness,
-  CustomLogicItem, MachineKnowledgeFact, OFGSetting, PostOpenQuestion, PostRecordSummary,
+  CustomLogicItem, MachineKnowledgeFact, ManualMachineInformation, ManualMachineInformationField, OFGSetting, PostOpenQuestion, PostRecordSummary,
   GPostDiagnostic, PostStandardApplication, PostValidationRecord, SiteStandard,
   ValidationFinding, ValidationHandoff, ValidationPolicy, ValidationTimeline,
 } from "../types";
@@ -244,12 +244,17 @@ export const api = {
   }),
   listProfileExtractions: (machineId: number) =>
     request<ProfileExtractionRun[]>(`/machines/${machineId}/profile-extraction-runs`),
+  listManualMachineInformationFields: (machineId: number) => request<ManualMachineInformationField[]>(`/machines/${machineId}/machine-information/fields`),
+  listManualMachineInformation: (machineId: number) => request<ManualMachineInformation[]>(`/machines/${machineId}/machine-information`),
+  saveManualMachineInformation: (machineId: number, payload: Record<string, unknown>) => request<ManualMachineInformation>(`/machines/${machineId}/machine-information/manual`, { method: "POST", body: JSON.stringify(payload) }),
+  discardMachineInformation: (machineId: number, fieldKey: string) => request<void>(`/machines/${machineId}/machine-information/${encodeURIComponent(fieldKey)}`, { method: "DELETE" }),
   getProfileExtraction: (runId: number) =>
     request<ProfileExtractionRun>(`/profile-extraction-runs/${runId}`),
   listProfileProposals: (runId: number) =>
     request<ProfileProposal[]>(
       `/profile-extraction-runs/${runId}/proposals?page_size=250`,
     ),
+  getProfileProposal: (proposalId: number) => request<ProfileProposal>(`/profile-field-proposals/${proposalId}`),
   getProfileReviewSummary: (runId: number) =>
     request<ProfileReviewSummary>(
       `/profile-extraction-runs/${runId}/review-summary`,

@@ -143,6 +143,7 @@ class MachineProfileFieldSource(Base):
     machine_profile_revision_id: Mapped[int] = mapped_column(ForeignKey("machine_profile_revisions.id"), index=True)
     field_key: Mapped[str] = mapped_column(String(100))
     value_json: Mapped[object | None] = mapped_column(JSON, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(30), nullable=True)
     source_type: Mapped[str] = mapped_column(String(40))
     document_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     document_chunk_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

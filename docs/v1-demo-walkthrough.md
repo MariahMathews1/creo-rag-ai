@@ -10,7 +10,7 @@ make seed-v1-demo
 make dev
 ```
 
-Open the app, select **KLS-1840N V1 Demo**, and open **KLS-1840N Demo Post**.
+Open the app, select **R&D FANUC Lathe Demo**, and open **RL-200 FANUC 0i-TF Demo Post**.
 
 ## Recommended story
 

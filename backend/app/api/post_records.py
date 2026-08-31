@@ -30,6 +30,7 @@ from app.validation.diagnostics import GPostDiagnosticParser, fil_static_checks
 router = APIRouter(tags=["Post Records"])
 
 FACT_STATUS = {"confirmed", "needs_review", "unknown", "conflicting", "not_applicable"}
+POST_REVIEW_STATUS = {"available_from_machine", "needs_information", "reviewed_for_post", "not_applicable"}
 OFG_STATUS = {"unmapped", "mapped", "needs_review", "needs_information", "conflicting", "reviewed", "not_applicable", "custom_logic_required"}
 DEFAULT_REQUIRED_GATES = ["Configuration Review", "G-POST Compilation", "NC Programmer Review"]
 DEFAULT_OPTIONAL_GATES = ["Controlled Test Post", "Local NC Review", "VERICUT Simulation", "Dry Run"]
@@ -57,17 +58,19 @@ def row_or_404(model, row_id: int, record_id: int, db: Session):
 
 
 def _value(draft: GPostDraft, revision: MachineProfileRevision, key: str):
+    configuration = revision.machine_configuration_json or {}
+    capabilities = revision.capabilities_json or {}
     values = {
         "machine_type": revision.machine_type, "controller": revision.controller_model or revision.controller_name,
-        "axes": revision.axis_count, "x_travel": [revision.x_min, revision.x_max], "y_travel": [revision.y_min, revision.y_max],
-        "z_travel": [revision.z_min, revision.z_max], "max_spindle_rpm": revision.max_spindle_rpm,
+        "axes": revision.axis_count, "x_travel": configuration.get("x_travel", [revision.x_min, revision.x_max]), "y_travel": configuration.get("y_travel", [revision.y_min, revision.y_max]),
+        "z_travel": configuration.get("z_travel", [revision.z_min, revision.z_max]), "max_spindle_rpm": revision.max_spindle_rpm,
         "max_feed_rate": revision.max_feed_rate, "work_offsets": revision.supported_work_offsets_json,
         "safe_start": draft.templates_json.get("safe_start"), "tool_change": draft.templates_json.get("tool_change"),
         "spindle_cw": draft.templates_json.get("spindle_start_cw"), "spindle_ccw": draft.templates_json.get("spindle_start_ccw"),
         "spindle_stop": draft.templates_json.get("spindle_stop"), "coolant_on": draft.templates_json.get("coolant_on"),
         "coolant_off": draft.templates_json.get("coolant_off"), "feed_mode": draft.templates_json.get("feed_mode"),
         "rapid_move": draft.templates_json.get("rapid_move"), "linear_move": draft.templates_json.get("linear_feed_move"),
-        "program_end": draft.templates_json.get("program_end"), "supported_cycles": None,
+        "program_end": draft.templates_json.get("program_end"), "supported_cycles": capabilities.get("turning_cycles") or capabilities.get("canned_cycles") or capabilities.get("drilling_cycles"),
     }
     value = values[key]
     if isinstance(value, list) and not any(item is not None for item in value): return None
@@ -178,13 +181,12 @@ def ensure_defaults(db: Session, draft: GPostDraft) -> None:
             if row.structured_value_json is None and definition.structured_kind and row.value_json is None:
                 row.structured_value_json = _structured_default(definition.structured_kind, revision)
             if row.code_status is None and definition.structured_kind == "code_table": row.code_status = "unknown"
-        existing_question_fact_ids = set(db.scalars(select(OpenQuestion.related_id).where(
-            OpenQuestion.post_record_id == draft.id, OpenQuestion.related_type == "machine_fact")))
-        for fact in existing_facts.values():
-            if fact.status == "unknown" and fact.id not in existing_question_fact_ids:
-                db.add(OpenQuestion(post_record_id=draft.id, question_type="machine_knowledge", title=f"Confirm {fact.name}",
-                    description="Required machine knowledge is not confirmed.", related_type="machine_fact", related_id=fact.id,
-                    severity="warning", source_context=fact.source_label, status="open"))
+        # Earlier V1 builds generated one user-visible question per unknown fact. Preserve those rows
+        # as internal history, but do not present or recreate them as engineer questions.
+        for question in db.scalars(select(OpenQuestion).where(OpenQuestion.post_record_id == draft.id,
+                OpenQuestion.related_type == "machine_fact",
+                OpenQuestion.description == "Required machine knowledge is not confirmed.")):
+            question.question_type = "system_missing_information"
         db.commit()
 
 
@@ -216,7 +218,9 @@ def list_facts(record_id: int, db: Session = Depends(get_db)):
 def create_fact(record_id: int, payload: MachineFactWrite, db: Session = Depends(get_db)):
     editable_record(record_id, db)
     if payload.status not in FACT_STATUS: raise HTTPException(422, "Unsupported Machine Knowledge status")
-    row = MachineKnowledgeFact(post_record_id=record_id, **payload.model_dump(), reviewed_at=utc_now() if payload.status == "confirmed" else None)
+    if payload.post_review_status not in POST_REVIEW_STATUS: raise HTTPException(422, "Unsupported Post review status")
+    row = MachineKnowledgeFact(post_record_id=record_id, **payload.model_dump(),
+        reviewed_at=utc_now() if payload.post_review_status == "reviewed_for_post" else None)
     db.add(row); db.commit(); db.refresh(row); return fact_read(row, [])
 
 
@@ -224,8 +228,11 @@ def create_fact(record_id: int, payload: MachineFactWrite, db: Session = Depends
 def update_fact(record_id: int, item_id: int, payload: MachineFactWrite, db: Session = Depends(get_db)):
     row = row_or_404(MachineKnowledgeFact, item_id, record_id, db)
     if payload.status not in FACT_STATUS: raise HTTPException(422, "Unsupported Machine Knowledge status")
+    if payload.post_review_status not in POST_REVIEW_STATUS: raise HTTPException(422, "Unsupported Post review status")
     for key, value in payload.model_dump().items(): setattr(row, key, value)
-    row.reviewed_at = utc_now() if payload.status == "confirmed" else None
+    if payload.status == "confirmed" and payload.post_review_status == "available_from_machine":
+        row.post_review_status = "reviewed_for_post"
+    row.reviewed_at = utc_now() if row.post_review_status == "reviewed_for_post" else None
     db.commit(); db.refresh(row)
     settings = list(db.scalars(select(OFGSetting).where(OFGSetting.post_record_id == record_id)))
     return fact_read(row, settings)
@@ -354,11 +361,22 @@ def list_logic(record_id: int, db: Session = Depends(get_db)): return _crud_list
 
 @router.post("/post-records/{record_id}/custom-logic", response_model=CustomLogicRead, status_code=201)
 def create_logic(record_id: int, payload: CustomLogicWrite, db: Session = Depends(get_db)):
-    editable_record(record_id, db); row = CustomLogicItem(post_record_id=record_id, **payload.model_dump()); db.add(row); db.commit(); db.refresh(row); return row
+    editable_record(record_id, db)
+    setting = None
+    if payload.related_ofg_setting_id is not None:
+        setting = db.get(OFGSetting, payload.related_ofg_setting_id)
+        if setting is None or setting.post_record_id != record_id: raise HTTPException(422, "Related OFG setting does not belong to this Post Record")
+    row = CustomLogicItem(post_record_id=record_id, **payload.model_dump()); db.add(row); db.flush()
+    if setting is not None:
+        setting.requires_custom_logic = True; setting.custom_logic_id = row.id; setting.status = "custom_logic_required"
+    db.commit(); db.refresh(row); return row
 
 @router.put("/post-records/{record_id}/custom-logic/{item_id}", response_model=CustomLogicRead)
 def update_logic(record_id: int, item_id: int, payload: CustomLogicWrite, db: Session = Depends(get_db)):
     row = row_or_404(CustomLogicItem, item_id, record_id, db)
+    if payload.related_ofg_setting_id is not None:
+        setting = db.get(OFGSetting, payload.related_ofg_setting_id)
+        if setting is None or setting.post_record_id != record_id: raise HTTPException(422, "Related OFG setting does not belong to this Post Record")
     for key, value in payload.model_dump().items(): setattr(row, key, value)
     db.commit(); db.refresh(row); return row
 
@@ -378,7 +396,8 @@ def static_check_logic(record_id: int, item_id: int, payload: dict, db: Session 
 
 
 @router.get("/post-records/{record_id}/open-questions", response_model=list[OpenQuestionRead])
-def list_questions(record_id: int, db: Session = Depends(get_db)): return _crud_list(OpenQuestion, record_id, db)
+def list_questions(record_id: int, db: Session = Depends(get_db)):
+    return [row for row in _crud_list(OpenQuestion, record_id, db) if row.question_type != "system_missing_information"]
 
 @router.post("/post-records/{record_id}/open-questions", response_model=OpenQuestionRead, status_code=201)
 def create_question(record_id: int, payload: OpenQuestionWrite, db: Session = Depends(get_db)):
@@ -586,6 +605,10 @@ def clone_engineering_record(db: Session, source_id: int, target_id: int) -> Non
         values["source_machine_fact_ids_json"] = [fact_map[item] for item in row.source_machine_fact_ids_json if item in fact_map]
         values["custom_logic_id"] = logic_map.get(row.custom_logic_id)
         clone = OFGSetting(post_record_id=target_id, **values); db.add(clone); db.flush(); ofg_map[row.id] = clone.id
+    for source_logic_id, cloned_logic_id in logic_map.items():
+        source_logic = db.get(CustomLogicItem, source_logic_id); cloned_logic = db.get(CustomLogicItem, cloned_logic_id)
+        if source_logic and cloned_logic:
+            cloned_logic.related_ofg_setting_id = ofg_map.get(source_logic.related_ofg_setting_id)
     related_maps = {"machine_fact": fact_map, "ofg_setting": ofg_map, "custom_logic": logic_map}
     for row in db.scalars(select(OpenQuestion).where(OpenQuestion.post_record_id == source_id)):
         values = {column.name: getattr(row, column.name) for column in OpenQuestion.__table__.columns
@@ -622,8 +645,8 @@ def delete_engineering_record(db: Session, record_id: int) -> None:
         db.execute(delete(ValidationFinding).where(ValidationFinding.validation_record_id.in_(validation_ids)))
         db.execute(delete(GPostDiagnostic).where(GPostDiagnostic.validation_record_id.in_(validation_ids)))
     db.execute(delete(ValidationPolicy).where(ValidationPolicy.post_record_id == record_id))
-    for model in (OpenQuestion, OFGSetting, MachineKnowledgeFact, PostStandardApplication,
-                  CustomLogicItem, PostValidationRecord):
+    for model in (OpenQuestion, CustomLogicItem, OFGSetting, MachineKnowledgeFact, PostStandardApplication,
+                  PostValidationRecord):
         db.execute(delete(model).where(model.post_record_id == record_id))
 
 
@@ -657,19 +680,23 @@ def summary_data(db: Session, draft: GPostDraft) -> dict:
     confirmed = sum(row.status in {"confirmed", "not_applicable"} for row in facts)
     reviewed_settings = sum(row.status == "reviewed" for row in applicable_settings)
     reviewed_logic = sum(row.status in {"reviewed", "rejected", "deferred"} for row in logic)
-    open_questions = [row for row in questions if row.status not in {"resolved", "deferred"}]
+    open_questions = [row for row in questions if row.question_type != "system_missing_information" and row.status not in {"resolved", "deferred"}]
     blocking_questions = [row for row in open_questions if row.severity == "blocking"]
     conflicts = [row for row in standards if row.conflict_status != "none"]
     blockers = ([{"type": "machine_fact", "id": row.id, "title": row.name, "reason": row.status} for row in facts if row.status in {"unknown", "conflicting"}] +
                 [{"type": "ofg_setting", "id": row.id, "title": row.display_name, "reason": row.status} for row in applicable_settings if row.status in {"needs_information", "conflicting"}] +
                 [{"type": "site_standard", "id": row.id, "title": "Site Standard Conflict", "reason": row.conflict_note or "Review required"} for row in conflicts])
+    unique_blockers = {}
+    for item in blockers:
+        unique_blockers.setdefault((item["type"], item["title"].strip().lower()), item)
+    blockers = list(unique_blockers.values())
     if draft.status == "archived": overall = "archived"
     elif validations: overall = "rnd_validated" if gates_satisfied and not blockers and not open_questions and not open_findings else "under_validation"
     elif blockers or blocking_questions: overall = "needs_information"
     elif facts and confirmed == len(facts) and applicable_settings and reviewed_settings == len(applicable_settings) and reviewed_logic == len(logic): overall = "ready_for_engineering_review"
     elif confirmed or reviewed_settings or standards or logic: overall = "building"
     else: overall = "setup"
-    if confirmed < len(facts): next_action = {"label": "Continue Machine Knowledge Review", "path": "machine-knowledge"}
+    if confirmed < len(facts): next_action = {"label": "Continue Machine Information Review", "path": "machine-knowledge"}
     elif reviewed_settings < len(applicable_settings): next_action = {"label": "Continue OFG Configuration", "path": "ofg-configuration"}
     elif open_questions: next_action = {"label": "Resolve Open Questions", "path": "review-validation"}
     elif reviewed_logic < len(logic): next_action = {"label": "Review Custom Logic", "path": "custom-logic"}
@@ -679,7 +706,7 @@ def summary_data(db: Session, draft: GPostDraft) -> dict:
         "ofg_configuration": {"reviewed": reviewed_settings, "total": len(applicable_settings)},
         "site_standards": {"applied": sum(row.status == "applied" for row in standards), "total": len(standards), "conflicts": len(conflicts)},
         "custom_logic": {"identified": len(logic), "reviewed": reviewed_logic},
-        "open_questions": {"open": len(open_questions), "total": len(questions)},
+        "open_questions": {"open": len(open_questions), "total": len([row for row in questions if row.question_type != "system_missing_information"])},
         "validation": {"count": len(validations), "status": "NOT_STARTED" if not validations else validations[0].result,
             "required_gates": required_gates, "gate_status": gate_status, "gates_satisfied": gates_satisfied,
             "open_findings": len(open_findings),

@@ -92,6 +92,43 @@ class ProposalReview(BaseModel):
     review_note: str | None = Field(default=None, max_length=2000)
 
 
+class ManualInformationWrite(BaseModel):
+    fact_key: str = Field(min_length=1, max_length=100)
+    value: object
+    unit: str | None = Field(default=None, max_length=30)
+    source_basis: str = Field(min_length=1, max_length=40)
+    document_id: int | None = None
+    source_detail: str | None = Field(default=None, max_length=300)
+    notes: str | None = Field(default=None, max_length=2000)
+    review_status: str = Field(pattern="^(confirmed|needs_review)$")
+    proposal_id: int | None = None
+
+
+class ManualInformationRead(BaseModel):
+    id: int
+    machine_profile_id: int
+    revision_id: int
+    fact_key: str
+    label: str
+    category: str
+    value: object
+    unit: str | None
+    source_basis: str
+    source_label: str
+    source_detail: str | None
+    notes: str | None
+    review_status: str
+    proposal_id: int | None
+
+
+class ManualInformationFieldRead(BaseModel):
+    fact_key: str
+    label: str
+    category: str
+    data_type: str
+    units: list[str]
+
+
 class ReviewCategorySummary(BaseModel):
     category: str
     total: int

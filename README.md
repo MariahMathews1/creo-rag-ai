@@ -123,11 +123,11 @@ Machine Assistant retrieves technical information from the selected machine's pr
 
 ## End-to-End Demo Walkthrough
 
-The canonical fictional walkthrough is **KLS-1840N Demo** with **KLS-1840N FANUC Demo Post**.
+The canonical fictional walkthrough is **R&D FANUC Lathe Demo** with **RL-200 FANUC 0i-TF Demo Post**.
 
-1. Open **Machines**. Explain that the machine is the authoritative context. Open the KLS demo and click **Review Machine Knowledge**.
+1. Open **Machines**. Explain that the machine is the authoritative context. Open the R&D FANUC lathe demo and click **Review Machine Information**.
 2. Show confirmed spindle facts. Open **Maximum Feed Rate**, which intentionally needs review. Point out source, status, reviewer controls, and downstream traceability.
-3. Open **Documents**. Show **KLS Machine Manual — Fictional Demo**, extraction status, and contextual actions.
+3. Open **Documents**. Show **RL-200 Machine Manual — Fictional Demo**, extraction status, and contextual actions.
 4. Open **Post Builder**, then the demo Post Record. Explain that its status remains **Building** because uncertainty is visible.
 5. On **Overview**, show completion counts, outstanding work, and the recommended next action.
 6. Open **OFG Configuration**. Show reviewed spindle mappings and an unverified setting. Open a row to demonstrate source-fact traceability, Not Yet Verified menu location, engineer notes, and the applied Tool Change Safe Retract standard.
